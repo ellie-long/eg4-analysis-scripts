@@ -1,103 +1,114 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <iostream.h>
+#include <time.h>
+#include <math.h>
+using namespace std;
+
+void run_check()
+{
+	TStopwatch runAllTime;
+
+	// Set debug mode
+//	bool debug = true;
+	bool debug = false;
+
+	cout << "Running run_check()..." << endl;
+
+	if (debug) {cout << "Debug Mode On" << endl;}
+	else {cout << "Debug Mode Off" << endl;}
+
+	// Get runNumber from input.file
+	string line = "";
+	ifstream runNumberInputFile ("./input.file");
+	getline(runNumberInputFile, line);
+	int inRunNumber = atoi(line.c_str());
+	int runNumber = inRunNumber;
+	cout << "runNumber: " << runNumber << endl;
+
+	// Gets run information and passes it to the main
+	// workhorse script check_run
+	get_run_info(runNumber, runAllTime, debug);
+
+	// Get script run time
+	Double_t totTime  = runAllTime.RealTime(); runAllTime.Continue();
+	int totTimeDays		= floor(totTime/60/60/24);
+	int totTimeHours	= fmod((totTime/60/60.0),24);
+	int totTimeMinutes	= fmod((totTime/60.0),60);
+	double totTimeSeconds	= totTime - 24*60*60*totTimeDays - 60*60*totTimeHours - 60*totTimeMinutes;
+	cout << "Elapsed total time:              " << totTimeDays << " Days, " << totTimeHours << " Hours, " << totTimeMinutes << " Min., " << totTimeSeconds << " Sec." << endl;
+
+	cout << "Finished with run_check()!" << endl;
+	gROOT->ProcessLine(".q");
+	return;
+	cout << "Uh-oh? I shouldn't be here..." << endl;
+}
 
 
+// Gets run information and passes it to the workhorse script check_run
+void get_run_info(int runNumber, TStopwatch runInfoTime, bool debug)
+{
+	cout << "============================================================" << endl;
+	cout << "Running get_run_info(" << runNumber << ",runInfoTime)..." << endl;
 
-void run_check(){
+	// Gets file prefix for current runNumber
+	TString findCmd = "find /volatile/clas/claseg4/pass2 -name 'root_";
+	findCmd += runNumber;
+	findCmd += "_pass2.a00.root'";
+	TString fullFile = gSystem->GetFromPipe(findCmd);
+	TString filePrefix = fullFile.Remove(fullFile.Length()-25,fullFile.Length());
 
-
-	TString filePrefix = "/volatile/clas/claseg4/pass2/";
 	double e_beam;
 	TString e_beamStr;
 	TString target;
 	TString targetStr;
-	int runNumber;
-	int endRunNumber;
 	TString checkAll;
-	TString debugStr;
-	bool debug = false;
-	int sector;
+	int sector = 1;
 	int maxSector = 7;
 
-	cout << "Are you debugging code? ";
-	cin >> debugStr;
-	if ((debugStr == "yes") || (debugStr == "Yes") || (debugStr == "y") || (debugStr =="Y")) {cout << "Entering Debug Mode..." << endl; debug = true;}
-	else {cout << "Entering Normal Mode..." << endl; debug = false;}
+	// Makes debug mode take far less time
+	if (debug) {sector = 6;}
 
-	if (!debug)
-	{
-		cout << "Enter beam energy (1.1, 1.3, 1.5, 2.0, 2.2, 3.0): ";
-		cin >> e_beam;
-//		cout << "Beam energy: " << e_beam << endl;
-
-		cout << "Enter target type (c12, nh3, nd3, empty): ";
-		cin >> target;
-
-		cout << "Check all runs for " << e_beam << " GeV, " << target << "? ";
-		cin >> checkAll;
-
-	}
-	else 
-	{
-		e_beam=1.1; 
-		target="nh3"; 
-		checkAll="y"; 
-//		maxSector = 2;
-	}
-
-	if (e_beam==1.1) {e_beamStr = "1p1gev/";}
-	else if (e_beam==1.3) {e_beamStr = "1p3gev/";}
-	else if (e_beam==1.5) {e_beamStr = "1p5gev/";}
-	else if (e_beam==2.0) {e_beamStr = "2gev/";}
-	else if (e_beam==2.2) {e_beamStr = "2p2gev/";}
-	else if (e_beam==3.0) {e_beamStr = "3gev/";}
+	// Get information based on file placement
+	if      (fullFile.Contains("1p1gev")) {e_beam = 1.1;}
+	else if (fullFile.Contains("1p3gev")) {e_beam = 1.3;}
+	else if (fullFile.Contains("1p5gev")) {e_beam = 1.5;}
+	else if (fullFile.Contains("2gev"))   {e_beam = 2.0;}
+	else if (fullFile.Contains("2p2gev")) {e_beam = 2.2;}
+	else if (fullFile.Contains("3gev"))   {e_beam = 3.0;}
 	else {cout << "ERR: Incorrect input." << endl; return;}
-	filePrefix += e_beamStr;
 
-//	cout << "Target: " << target << endl;
-	if (target=="c12") {targetStr="carb/";}
-	else if (target=="nh3") {targetStr="nh3/";}
-	else if (target=="nd3") {targetStr="nd3/";}
-	else if (target=="empty") {targetStr="emp/";}
+	if (fullFile.Contains("carb"))     {target = "c12";}
+	else if (fullFile.Contains("nh3")) {target = "nh3";}
+	else if (fullFile.Contains("nd3")) {target = "nd3";}
+	else if (fullFile.Contains("emp")) {target = "empty";}
 	else {cout << "ERR: Incorrect input." << endl; return;}
-	filePrefix += targetStr;
-	filePrefix += "root/root_";
 
-
-	if (!debug && e_beam==1.1 && target=="nh3" && ((checkAll == "yes") || (checkAll == "Yes") || (checkAll == "y") || (checkAll =="Y"))) {cout << "Rad" << endl; runNumber = 52080; endRunNumber = 52289;}
-	else if (debug && e_beam==1.1 && target=="nh3" && ((checkAll == "yes") || (checkAll == "Yes") || (checkAll == "y") || (checkAll =="Y"))) {cout << "Rad" << endl; runNumber = 52080; endRunNumber = 52080;}
-	else
+	// Run main workhorse script for each sector
+	for (int j=sector; j<maxSector; j++)
 	{
-		cout << "Enter beginning run number: ";
-		cin >> runNumber;
-		cout << "Enter ending run number: ";
-		cin >> endRunNumber;
+		check_run(runNumber, e_beam, target, filePrefix, j, debug, runInfoTime);
 	}
 
-	cout << "Beginning run number: " << runNumber << endl;	
-	cout << "Endding run number:   " << endRunNumber << endl;	
-
-	for (int i=runNumber; i<(endRunNumber+1); i++)
-	{
-		for (int sector=1; sector<maxSector; sector++)
-		{
-			check_run(i, e_beam, targetStr, target, filePrefix, sector, debug);
-		}
-	}	
-
-	cout << "All done!" << endl;
+	cout << "Finished with get_run_info(" << runNumber << ",runInfoTime)!" << endl;
+	cout << "============================================================" << endl;
 	return;
 }
 
-
-void check_run(int runNumber, double e_beam, TString targetStr, TString target, TString filePrefix, int sector, bool debug)
+// Main workhorse script
+void check_run(int runNumber, double e_beam, TString target, TString filePrefix, int sector, bool debug, TStopwatch allTime)
 {
 	cout << "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv" << endl;
 	cout << "Running check_run for Run # " << runNumber << ", Sector " << sector << "..." << endl;
+
+	TStopwatch thisRunTime;
 	TString fileName;
 	TChain* chain = new TChain("h10");
 	bool fileExists = false;
 	int aMax;	
 	char e_beamStr[3];
 	
+	// Stops e_beamStr from being more than 1 decimal place long
 	sprintf(e_beamStr,"%.1f",e_beam);
 
 	TString title = "Beam Energy = ";
@@ -109,15 +120,33 @@ void check_run(int runNumber, double e_beam, TString targetStr, TString target, 
 	title += ", Sector ";
 	title += sector;
 	
+	// Define cuts
 	TString cuts = "id==11 && dc_sect==";
 	cuts += sector;
 
 	if (debug) {aMax = 2; cout << "Debug Mode On" << endl;}
-	else {aMax = 1000; cout << "Normal Mode On" << endl;}
+	else {aMax = 1000; cout << "Debug Mode Off" << endl;}
 
+	// Beam energies below are taken from Xiaochao Zheng's EG4 analysis note:
+	// "Double- and Target Spin Asymmetries in
+	//  Pion Electro-production from Polarized NH3 Targets"
+	if (runNumber < 50724) {e_beam = 1.5190;}
+	else if (runNumber > 50723 && runNumber < 50989) {e_beam = 2.9990;}
+	else if (runNumber > 50988 && runNumber < 51155) {e_beam = 2.2596;}
+	else if (runNumber > 51154 && runNumber < 51407) {e_beam = 1.3390;}
+	else if (runNumber > 51406 && runNumber < 51487) {e_beam = 1.3376;}
+	else if (runNumber > 51486 && runNumber < 51791) {e_beam = 1.9889;}
+	else if (runNumber > 51790 && runNumber < 51871) {e_beam = 1.9932;}
+	else if (runNumber > 51874 && runNumber < 52041) {e_beam = 1.3369;}
+	else if (runNumber > 52050 && runNumber < 52296) {e_beam = 1.0539;}
+	else {cout << "ERR: Run number has no known beam energy. Skipping run." << endl; return;}
+
+
+	// Adds root files to chain
 	for (int a=0; a<aMax; a++)
 	{
 		fileName = filePrefix;
+		fileName += "root_";
 		fileName += runNumber;
 		fileName += "_pass2.a";
 		if (a < 10) {fileName += "0";}
@@ -137,8 +166,8 @@ void check_run(int runNumber, double e_beam, TString targetStr, TString target, 
 			a=999999999;
 		}
 	}
-//	}
 
+	// Makes and displays kinematic variables
 	if (fileExists)
 	{
 		gStyle->SetPalette(1);
@@ -196,7 +225,7 @@ void check_run(int runNumber, double e_beam, TString targetStr, TString target, 
 		pad3->Update();
 
 		pad4->cd();
-		TString titlebeamE = "beamE for Run # ";
+		TString titlebeamE = "Beam Energy for Run # ";
 		titlebeamE += runNumber;
 		cout << "Drawing " << titlebeamE << "..." << endl;
 		TString drawbeamE = "";
@@ -284,8 +313,14 @@ void check_run(int runNumber, double e_beam, TString targetStr, TString target, 
 		histx->Draw();
 		pad9->Update();
 
-	
-		TString imagename = "./Run_Checks/Run_Check_for_Sector_";
+
+		// Outputs file image
+//		TString imagename = "./Run_Checks/Run_Check_for_Sector_";
+		TString imagename = "./Run_Check_for_";
+		imagename += target;
+		imagename += "_Ebeam_";
+		imagename += e_beamStr;
+		imagename += "GeV_Sector_";
 		imagename += sector;
 		imagename += "_Run_";
 		imagename += runNumber;
@@ -294,11 +329,31 @@ void check_run(int runNumber, double e_beam, TString targetStr, TString target, 
 	}
 	else {cout << "There is no file for Run # " << runNumber << endl;}
 
-	TString exitst;
-//	cout << "Are you ready to finish?" << endl;
-//	cin >> exitst;
+	// Stops code from automatically exiting to check that plots
+	// look good
+//	if (debug)
+	if (false)
+	{
+		TString exits;
+		cout << "Are you ready to finish?" << endl;
+		cin >> exits;
+	}
 
-	
+
+	// Output elapsed time
+	Double_t thisTime = thisRunTime.RealTime(); thisRunTime.Reset();
+	Double_t totTime  = allTime.RealTime(); allTime.Continue();
+	int thisTimeDays	= floor(thisTime/60/60/24);
+	int thisTimeHours	= fmod((thisTime/60/60.0),24);
+	int thisTimeMinutes	= fmod((thisTime/60.0),60);
+	double thisTimeSeconds	= thisTime - 24*60*60*thisTimeDays - 60*60*thisTimeHours - 60*thisTimeMinutes;
+	int totTimeDays		= floor(totTime/60/60/24);
+	int totTimeHours	= fmod((totTime/60/60.0),24);
+	int totTimeMinutes	= fmod((totTime/60.0),60);
+	double totTimeSeconds	= totTime - 24*60*60*totTimeDays - 60*60*totTimeHours - 60*totTimeMinutes;
+	cout << "Elapsed time for current sector: " << thisTimeDays << " Days, " << thisTimeHours << " Hours, " << thisTimeMinutes << " Min., " << thisTimeSeconds << " Sec." << endl;
+	cout << "Elapsed total time:              " << totTimeDays << " Days, " << totTimeHours << " Hours, " << totTimeMinutes << " Min., " << totTimeSeconds << " Sec." << endl;
+
 	cout << "Finished check_run for Run # " << runNumber << "!" << endl;
 	cout << "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^" << endl;
 

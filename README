@@ -1,0 +1,14 @@
+ Because of the way that script is written, it takes your pwd (present working dir) 
+ to be the dir where all the important sub dir are:
+ inputs , logs, sub , results
+
+ so to execute the script, you may want to run it like this:
+
+ ./scripts/run_check ./info_lists/1p1_nh3.txt
+
+
+
+
+
+
+

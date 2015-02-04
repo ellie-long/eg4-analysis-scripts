@@ -1,0 +1,490 @@
+#!/usr/bin/perl -w
+#
+#	usage: batch_analysis [macro info file] [run list file]
+#
+#	date: 08/07/06
+#
+#	by: Jaideep Singh
+#
+#	description: (1) checks to make sure that all files needed for the job exist in the correct place
+#		     (2) creates the job in xml format (using xml format allow more features, such as email suppression)
+#		     (3) submits jobs to perform an "analysis" (cuts and histograms) on replayed runs
+#		     (4) CANNOT handle split root files, for now
+#		     (5) reads in one ROOT file and outputs one ROOT with a predefined name, no other files need to be copied
+#
+#	The script assumes that the directory where you are launching it froms contains the following subdir:
+#
+#		./inputs/	for root/analyzer macros and def files AND the "set_environment_variables_for_vanalyzer.sh" bash script
+#		./sub/		for (sub config files)
+#		./results/ 	default dir for output
+#		./logs/		dir for job, submit, and root/analyzer log files
+#
+#
+#	The format for the [macro info file] should be:
+#
+#		# comments and blank lines are skipped over
+#		
+#		# path of replayed root files
+#		path_root = /work/halla/gdh-3/gdh_rootfiles/
+#		
+#		# base of replayed file name -> [expbase]_[run num]_[inbase].root
+#		expbase = gdh
+#		
+#		# batch replay script and macro are reasonably clever about handling: 
+#		# 	inbase = ""        -> [expbase]_[run num].root 
+#		#	inbase = "replay"  -> [expbase[_[run num]_replay.root
+#		inbase = replay
+#		
+#		# macro name without options, assumed to be in "inputs" dir
+#		# macro is assumed to have options: (Int_t run_number , TString inbase , TString path)
+#		macro = asym_histos.C
+#		#macro = xs_histos.C
+#		
+#		# base of output files: [expbase]_[run num]_[outbase].root
+#		outbase = aasym
+#		#outbase = axs
+#		
+#		# output directory , directory where root and other non-log info will be copied
+#		# if none is given then, files are copied to [pwd]/results/output_[timestamp]/
+#		path_output = /work/halla/gdh-3/gdh_rootfiles/
+#		
+#		# log files, as well as the stdout and stderr will be copied to: [pwd]/logs/output_[timestamp]
+#		# typical log files::
+#		# [expbase]_[run num]_[outbase].stdout = STDOUT from job
+#		# [expbase]_[run num]_[outbase].stderr = STDERR from job
+#		
+#	The format for the [run list file] should be: 
+#	
+# 		# comments and blank lines are skipped over
+#		# anything after the run number preceded by whitespace is ignored
+#		# [run number][whitespace][whatever is ignored]
+#		4000	0
+#		4001	like whatever
+#		4002
+#
+#
+use strict "subs";
+
+# outputs error message if options are wrong or needed file does not exist
+sub print_usage
+{
+	if ($_[0] =~ /does not exist/)
+	{
+		print "$_[0]\n\nYou must launch this command from the directory that has the following subdirectories:\n";
+		print "\tinputs (macros and def files), sub (sub config files), results (default dir for output), logs (dir for job/submit logfiles)\n\n";
+		return "You launched from:\t".qx(pwd);
+	}
+	else 
+	{ return "improper usage: $_[0]\n correct usage: batch_analysis [run list file]\n"; }
+#	{ return "improper usage: $_[0]\n correct usage: batch_analysis [macro info file] [run list file]\n"; }
+}
+
+# if the file exists, return the output of the "file" command, otherwise "does not exist"
+sub check_exist
+{
+	my $result = qx( file $_[0] );
+	chomp($result);
+	my @parts = split /: / , $result;
+	if ( ($parts[1] =~ /ERROR/) || ($parts[1] =~ /No such file/) )
+	{ return "does not exist" }
+	else
+	{ return $parts[1]; }
+}
+
+# creates a general xml tag
+sub xml_tag
+{ 
+	my $tag   = $_[0];
+	my $value = $_[1];
+	return "<$tag name=\"$value\"/>"; 
+}
+
+# creates a Input or Output xml tag
+sub xml_io
+{
+	my $tag  = $_[0];
+	my $src  = $_[1];
+	my $dest = $_[2];
+	return "<$tag src=\"$src\" dest=\"$dest\"/>";
+}
+
+# makes an xml sub file and returns the file name
+sub make_xml_sub_file
+{
+	my ($inbase , $outbase , $path_subs , $path_logs , $path_inputs , $subinfo , $macro , $commands , $path_root , $this_file , $output , $path_output , $expbase , $run_num, $this_file_1, $this_file_2, $this_file_3, $macro1, $output2) = @_;
+#	my ($inbase , $outbase , $path_subs , $path_logs , $path_inputs , $subinfo , $macro , $commands , $path_root , $input , $output , $path_output , $expbase , $run_num ,$this_file_1, $this_file_2, $this_file_3, $macro2) = @_;
+	my $subfile = $path_subs."batch_analysis_subfile_N";
+	$textout = $path_output."eg4_run_check_text_for_run_".$run_num.".out\n";
+#	my $destfile = "e05102_R_".$run_num.".root";
+#	my $destfile1 = "neutron_cuts-hand_target_asym_vs_nu_for_run_".$run_num.".root";
+# appending "mss:" to the front of the path if the file is located in the mss
+	if ($path_root =~ /^\/mss\/.*/)
+	{ $path_root = "mss:".$path_root; }
+	open(SUBFILE,">$subfile");
+	print SUBFILE "<Request>\n";
+	print SUBFILE "\t".xml_tag("Project" , $subinfo{"project"})."\n";
+	print SUBFILE "\t".xml_tag("Track"   , $subinfo{"track"})."\n";
+	print SUBFILE "\t".xml_tag("Name"    , $subinfo{"jobname"})."\n";
+	print SUBFILE "\t".xml_tag("OS"      , $subinfo{"os"})."\n";
+	print SUBFILE "\t<Command><![CDATA[\n";
+#	print SUBFILE join "\n" , @{$commands};
+	print SUBFILE "echo '\\nellie\@ifarm> date' > ".$textout;
+	print SUBFILE "date >> ".$textout;
+	print SUBFILE "echo '\\nellie\@ifarm> source ".$path_inputs."set_environment_variables_for_vanalyzer\.tcsh' >> ".$textout;
+	print SUBFILE "source ".$path_inputs."set_environment_variables_for_vanalyzer\.tcsh >> ".$textout;
+	print SUBFILE "echo '\\nellie\@ifarm> printenv' >> ".$textout;
+	print SUBFILE "printenv >> ".$textout;
+	print SUBFILE "echo '\\nellie\@ifarm> ls -ltr' >> ".$textout;
+	print SUBFILE "ls -ltr >> ".$textout;
+	print SUBFILE "echo '\\nellie\@ifarm> rm input.file' >> ".$textout;
+	print SUBFILE "rm input.file >> ".$textout;
+	print SUBFILE "echo '\\nellie\@ifarm> ls -ltr' >> ".$textout;
+	print SUBFILE "ls -ltr >> ".$textout;
+	print SUBFILE "echo '\\nellie\@ifarm> echo ".$run_num." > input.file' >> ".$textout;
+	print SUBFILE "echo ".$run_num." > input.file\n";
+	print SUBFILE "echo '\\nellie\@ifarm> cat input.file' >> ".$textout;
+	print SUBFILE "cat input.file >> ".$textout;
+#	print SUBFILE "analyzer  ".$neutron_path_inputs.$macro." > /work/halla/e05102/disk1/ellie/batch/input/neutron/text/text_for_run_".$run_num.".out\n";
+#	print SUBFILE "echo '\\nellie\@ifarm> root ".$run_check_path_inputs.$macro."' >> ".$textout;
+	print SUBFILE "echo '\\nellie\@ifarm> analyzer ".$macro."' >> ".$textout;
+#	print SUBFILE "analyzer ".$run_check_path_inputs.$macro." >> ".$path_results."text_for_run_".$run_num.".out";
+#	print SUBFILE "root ".$run_check_path_inputs.$macro." >> ".$textout;
+	print SUBFILE "analyzer ".$macro." >> ".$textout;
+	print SUBFILE "echo '\\nellie\@ifarm> cp *.png ".$path_output.".' >> ".$textout;
+	print SUBFILE "cp *.png ".$path_output.". >> ".$textout;
+#	print SUBFILE "echo '\\nellie\@ifarm> cp -v *.root ".$path_results.".' >> ".$textout;
+#	print SUBFILE "cp -v *.root ".$path_results.". >> ".$textout;
+#	print SUBFILE "echo '\\nellie\@ifarm> analyzer ./".$macro1."' >> ".$textout;
+#	print SUBFILE "analyzer ./".$macro1." >> ".$textout;
+#	print SUBFILE "analyzer  ".$neutron_path_inputs.$macro." > /w/halla-1/e05102/ellie/batch/inputs/neutron_hunt/text/text_for_run_".$run_num.".out\n";
+
+# input options
+	print SUBFILE "echo '\\nellie\@ifarm> ls -ltr' >> ".$textout;
+	print SUBFILE "ls -ltr >> ".$textout;
+	print SUBFILE "echo '\\nellie\@ifarm> date' >> ".$textout;
+	print SUBFILE "date >> ".$textout;
+	print SUBFILE "\t]]></Command>\n\n";
+	print SUBFILE "\t<DiskSpace space=\"15\" unit=\"GB\"/>\n\n";
+	print SUBFILE "\t<Memory space=\"4\" unit=\"GB\"/>\n\n";
+	print SUBFILE "\t<TimeLimit unit=\"hours\" time=\"72\"/>\n\n";
+#	print SUBFILE "\t<TimeLimit unit=\"hours\" time=\"24\"/>\n\n";
+#	print SUBFILE "\t<TimeLimit unit=\"minutes\" time=\"10\"/>\n\n";
+	print SUBFILE "\t<Input src=\"".$run_check_path_inputs."run_check.cpp\" dest=\"run_check.cpp\"/>\n";
+
+	print SUBFILE "\n\t<Job>\n";
+#	print SUBFILE "\t\t".xml_io("Input"  , $path_run_check."rootlogon.C","rootlogon.C" )."\n";
+#	if (check_exist("/mss/halla/e05102/raw/e05102_".$run_num.".dat.0") ne "does not exist")
+#	{print SUBFILE "\t\t".xml_io("Input", "mss:/mss/halla/e05102/raw/e05102_".$run_num.".dat.0", "./e05102_".$run_num.".dat.0")."\n";}
+#	if (check_exist("/mss/halla/e05102/raw/e05102_".$run_num.".dat.1") ne "does not exist")
+#	{print SUBFILE "\t\t".xml_io("Input", "mss:/mss/halla/e05102/raw/e05102_".$run_num.".dat.1", "./e05102_".$run_num.".dat.1")."\n";}
+#	if (check_exist("/mss/halla/e05102/raw/e05102_".$run_num.".dat.2") ne "does not exist")
+#	{print SUBFILE "\t\t".xml_io("Input", "mss:/mss/halla/e05102/raw/e05102_".$run_num.".dat.2", "./e05102_".$run_num.".dat.2")."\n";}
+#	if (check_exist("/mss/halla/e05102/raw/e05102_".$run_num.".dat.3") ne "does not exist")
+#	{print SUBFILE "\t\t".xml_io("Input", "mss:/mss/halla/e05102/raw/e05102_".$run_num.".dat.3", "./e05102_".$run_num.".dat.3")."\n";}
+#	print SUBFILE "\t\t".xml_io("Input"  , $path_root.$input  ,              $input )."\n";
+#	if (check_exist($path_root.$this_file_1) ne "does not exist")
+#	{print SUBFILE "\t\t".xml_io("Input"	, $path_root.$this_file_1,$this_file_1 )."\n";}
+#	if (check_exist($path_root.$this_file_2) ne "does not exist")
+#	{print SUBFILE "\t\t".xml_io("Input"	, $path_root.$this_file_2,$this_file_2 )."\n";}
+#	if (check_exist($path_root.$this_file_3) ne "does not exist")
+#	{print SUBFILE "\t\t".xml_io("Input"  , $path_root.$this_file_3,$this_file_3 )."\n";}
+
+
+
+#	if (check_exist($path_root.$this_file_1) ne "does not exist")
+#	{print SUBFILE "\t\t".xml_io("Input"  , $path_root.$this_file_1,$this_file_1 )."\n";}	
+#	if (check_exist($path_root.$this_file_2) ne "does not exist")
+#	{print SUBFILE "\t\t".xml_io("Input"  , $path_root.$this_file_2,$this_file_2 )."\n";}
+#	if (check_exist($path_root.$this_file_3) ne "does not exist")
+#	{print SUBFILE "\t\t".xml_io("Input"  , $path_root.$this_file_3,$this_file_3 )."\n";}
+
+#	print SUBFILE "\t\t".xml_io("Input"  , $path_root.$input  ,              $destfile )."\n";
+#	print SUBFILE "\t\t".xml_io("Output" , "./".$output , $path_output.$output)."\n";
+#	print SUBFILE "\t\t".xml_io("Output" , "./summaryphy_".$run_num.".log" , $path_output."eg4_run_check_".$run_num.".log")."\n";
+#	print SUBFILE "\t\t".xml_io("Output" ,            $output2 , $path_output.$output2)."\n";
+#	print SUBFILE "\t\t".xml_io("Output" , "eg4_run_check_for_run_".$run_num.".txt" , $path_output."eg4_run_check_for_run_".$run_num.".txt")."\n";
+#	print SUBFILE "\t\t".xml_io("Output" , "charge_lt_for_run_".$run_num.".txt" , $path_output."charge_lt_for_run_".$run_num.".txt")."\n";
+#	print SUBFILE "\t\t".xml_io("Output" , "target_asymmetry_for_run_".$run_num.".txt" , $path_output."target_asymmetry_for_run_".$run_num.".txt")."\n";
+#	print SUBFILE "\t\t".xml_io("Output" ,            $output , $output)."\n";
+#	print SUBFILE "\t\t".xml_io("Output" , "text_for_run_".$run_num.".out" , $path_output."text_for_run_".$run_num.".out")."\n";
+	print SUBFILE "\t\t<Stdout dest=\"".$path_logs.$expbase."_".$run_num.$outbase."\.stdout\"/>\n";
+	print SUBFILE "\t\t<Stderr dest=\"".$path_logs.$expbase."_".$run_num.$outbase."\.stderr\"/>\n";
+	print SUBFILE "\t</Job>\n\n";
+	print SUBFILE "</Request>\n";
+	close(SUBFILE);
+	return $subfile;
+}
+
+# getting the current timestamp in YR:MO:DA_HR:MI:SE format
+($sec,$min,$hour,$mday,$mon,$year) = localtime;
+$mon = $mon + 1;
+$sec = "0"."$sec" unless ($sec > 9);
+$min = "0"."$min" unless ($min > 9);
+$hour = "0"."$hour" unless ($hour > 9);
+$mday = "0"."$mday" unless ($mday > 9);
+$mon = "0"."$mon" unless ($mon > 9);
+$year = $year - 100;
+$year = "0"."$year" unless ($year > 9);
+$timestamp = $year.$mon.$mday."_".$hour.":".$min.":".$sec;
+
+# setting up default paths based on where the command was launched from
+$pwd = qx(pwd);
+chomp($pwd);
+$path_subs    = $pwd."/sub/";
+$path_logs    = $pwd."/logs/job_on_".$timestamp."/";
+#$path_inputs  = $pwd."/inputs/";
+$path_inputs  = $pwd."/inputs/";
+$neutron_path_inputs  = $pwd."/inputs/neutron_hunt/";
+$run_check_path_inputs  = $pwd."/inputs/run_check/";
+#$path_lists   = $pwd."/info_lists/";
+$path_lists   = $pwd."/";
+$path_results = $pwd."/results/output_".$timestamp."/";
+#$path_results = $pwd."/results/";
+
+#setting some defaults
+# $path_root   =  "not set";
+$path_root   = "/work/clas/claseg4/ellie/batch/inputs/ROOTfiles/";
+$path_run_check = "/work/clas/claseg4/disk1/ellie/batch/inputs/run_check/";
+# $expbase   =  "not set";
+$expbase     =  "eg4_run_check";
+# $macro     =  "not set";
+$macro       =  "run_check.cpp";
+$macro1      =  "";
+# $macro     =  "test_code.C";
+$inbase      =  "none";
+$outbase     =  "none";
+$path_output =  $path_results;
+#$textout = $path_output."text_for_run_".$run_num.".out\n";
+
+
+# checking the existence of macro info file and run file list
+#$macro_info = $ARGV[0];
+#$macro_info = $neutron_path_inputs.$macro;
+$macro_info = $run_check_path_inputs.$macro;
+#$run_list = $ARGV[1];
+$run_list = $ARGV[0];
+
+#if (!defined($macro_info))
+#{ die print_usage("no [macro info file]"); }
+if (!defined($run_list))
+{ die print_usage("no [run list file]"); }
+
+#die print_usage($path_lists.$macro_info."\t -> does not exist") if ( check_exist( $path_lists.$macro_info ) eq "does not exist" );
+die print_usage($path_lists.$run_list."\t -> does not exist") if ( check_exist( $path_lists.$run_list )  eq "does not exist" );
+
+# opening macro info and reading in info
+#open(MACROINFO , "<".$path_lists.$macro_info);
+open(MACROINFO , "<".$macro_info);
+LINE: while (<MACROINFO>)
+{
+	chomp;
+	if (/^\s*\#.*$/ || /^\s*$/)	#skipping over comment lines "#" and blank lines
+	{ next LINE; }
+	else
+	{
+	 	if    (/^(path_root)\s*=\s*(.*)/i)
+		{ $path_root = $2; }
+		elsif (/^(expbase)\s*=\s*(.+)/i)
+		{ $expbase = $2; }
+		elsif (/^(macro)\s*=\s*(.+)/i)
+		{ $macro = $2; }
+		elsif (/^(path_output)\s*=\s*(.+)/i)
+		{ $path_output = $2; }
+		elsif (/^(outbase)\s*=\s*(.*)/i)
+		{ 
+			$outbase = $2; 
+			$outbase =~ s/^\s*//;
+			$outbase =~ s/\s*$//;
+		}
+		elsif (/^(inbase)\s*=\s*(.*)/i)
+		{ 
+			$inbase = $2; 
+			$inbase =~ s/^\s*//;
+			$inbase =~ s/\s*$//;
+		}
+	}
+}
+close(MACROINFO);
+
+#fixing the form of the output base name
+if ($outbase eq "none")
+{ $outbase = ""; }
+else
+{ $outbase = "_".$outbase; }
+
+#fixing the form of the input base name
+if ($inbase eq "none")
+{ $inbase = ""; }
+else
+{ $inbase = "_".$inbase; }
+
+# making sure mss path , macro & def files are set and exist
+if    ($path_root eq "not set")
+{ die "mss path ($path_root) for raw data file was not set\n"; }
+elsif ($expbase eq "not set")
+{ die "base for raw data file name was not set\n"; }
+elsif ($macro eq "not set")
+{	
+	$inputs_ls = qx(ls $run_check_path_inputs*.C $run_check_path_inputs*.macro);
+#	$inputs_ls = qx(ls $neutron_path_inputs*.C $neutron_path_inputs*.macro);
+#	$inputs_ls = qx(ls path_inputs*.C path_inputs*.macro);
+	die "no macro was chosen, you can try one of these:\n$inputs_ls"; 
+}
+
+die "$path_root\t -> does not exist\n" if ( check_exist( $path_root ) eq "does not exist" );
+#die print_usage($macro."\t -> does not exist") if ( check_exist( $path_inputs.$macro ) eq "does not exist" );
+die print_usage($macro."\t -> does not exist") if ( check_exist( $run_check_path_inputs.$macro ) eq "does not exist" );
+
+# creating output directory if it does not exist
+# otherwise creates the default directory
+# otherwise fails
+if ( check_exist($path_output) ne "directory" )
+{ 
+#	$try_mkdir = qx(mkdir $path_output); 
+	if ( check_exist($path_output) ne "directory" )
+	{
+		print "ok, i will just make and fill the default directory = $path_results\n";
+		$path_output = $path_results;
+		$try_mkdir = qx(mkdir $path_output);
+		die print_usage($path_output."\t -> does not exist and can not be created") if ( check_exist( $path_output ) eq "does not exist" ); 	
+	}
+} 
+
+#making log dir
+if ( check_exist($path_logs) ne "directory" )
+{ 
+	$try_mkdir = qx(mkdir $path_logs); 
+	die print_usage($path_logs."\t -> does not exist and can not be created") if ( check_exist( $path_logs ) eq "does not exist" ); 
+}
+
+# setting up info for sub file in xml format
+# defaults:
+#$timelimit    = "none";
+#$disk_space   = "none";
+#$memory       = "none";
+#@email        = ();
+#@other_inputs = ();
+%subinfo            = ();
+# $subinfo{"project"} = $expbase;
+$subinfo{"project"} = "eg4a";
+$subinfo{"track"}   = "analysis";
+#$subinfo{"track"}   = "debug";
+$subinfo{"os"}      = "centos65";
+$jobname 	    = "eg4_analysis";
+@commands = ("date " , "source ".$path_inputs."set_environment_variables_for_vanalyzer\.tcsh" , "printenv" , "ls -ltr");
+
+# opening submission log file
+$submit_logfile = $path_logs."submit_".$timestamp."\.log";
+open(SUBMITLOG,">$submit_logfile");
+print SUBMITLOG "eg4_analysis $macro_info $run_list \t started at $timestamp\n";
+print SUBMITLOG "----- START contents of $macro_info ---------------------------------------------------------------------------------------\n";
+#print SUBMITLOG qx(cat $path_lists$macro_info);
+print SUBMITLOG qx(cat $macro_info);
+print SUBMITLOG "----- END contents of $macro_info ---------------------------------------------------------------------------------------\n\n";
+# opening run list file => creating xml based subs and submitting them in order of the file
+$line_num = 0;
+$job_count = 0;
+%no_repeats = ();
+@failed_run = ();
+$fail_count = 0;
+print SUBMITLOG "opening run list and noting any problems by line number: \n";
+open(RUNLIST , "<".$path_lists.$run_list);
+RUN: while (<RUNLIST>)
+{
+	$line_num++;
+	if (/^\s*\#.*$/ || /^\s*$/)
+	{ next RUN; }
+	else
+	{
+		chomp;
+		@parts = split /\s+/;
+		$run_num   = $parts[0];
+#		checking to make sure that the run number is defined and not repeated AND is a nonnegative integer
+		if (!defined($run_num))
+		{ 
+			print SUBMITLOG "$line_num : skipping line\n"; 
+			next RUN;
+		}
+#		unless ($run_num =~ /^[0123456789]{3,4}$/)
+		unless ($run_num =~ /^[0123456789]{3,5}$/)
+		{
+			print SUBMITLOG "$line_num : skipping because run number = $run_num is not a nonnegative integer\n";
+			next RUN;
+		}
+		if (defined($no_repeats{"$run_num"}))
+		{
+			$no_repeats{"$run_num"}++;
+			print SUBMITLOG "$line_num : already submitted run $run_num\n";
+			next RUN;
+		}
+		else
+		{ $no_repeats{"$run_num"} = 1; }
+#		@outputs = ();
+		$this_file = $expbase."_".$run_num."$inbase\.root";
+		$this_file_1 = $expbase."_".$run_num."_1.root";
+		$this_file_2 = $expbase."_".$run_num."_2.root";
+		$this_file_3 = $expbase."_".$run_num."_3.root";
+#		making sure root file exists
+#		if ( check_exist($path_root.$this_file) eq "does not exist" )
+#		{
+#			print SUBMITLOG "$line_num : $run_num does not exist, skipping\n";
+#			next RUN;
+#		}
+#		$outputs[0] = $expbase."_".$run_num."$outbase\.root";
+#		$outputs[1] = $expbase."_".$run_num."$outbase\.log";
+#		$output = $expbase."_".$run_num."$outbase\.root";
+#		$output = "hand_target_asym_vs_nu_for_runs_22450-22450.root";
+		$output = "e05102_R_".$run_num.".root";
+		$output2 = "neutron_cuts-hand_target_asym_vs_nu_for_run_".$run_num.".root";
+#		$sec_file = "e05102_R_".$run_num."_1.root";
+#		$thrd_file = "e05102_R_".$run_num."_2.root";
+#		$frth_file = "e05102_R_".$run_num."_3.root";
+#		$ffth_file = "hand_target_asym_vs_nu_for_run_".$run_num."_1.root";
+#		$sxth_file = "hand_target_asym_vs_nu_for_run_".$run_num."_2.root";
+#		$svnthfile = "hand_target_asym_vs_nu_for_run_".$run_num."_3.root";
+#		$output = $expbase."_$timestamp"."$outbase/";
+		$job_count++;
+		$subinfo{"jobname"} = $jobname."_".$job_count."_".$run_num;
+#		generating the xml sub file
+		$sub_file_name = make_xml_sub_file($inbase , $outbase , $path_subs , $path_logs , $path_inputs , $subinfo , $macro , \@commands , $path_root , $this_file , $output , $path_output , $expbase , $run_num, $this_file_1, $this_file_2, $this_file_3, $macro1, $output2);
+		# outputting the first sub file to make sure it looks okay
+		if ($job_count == 1)
+		{
+			print SUBMITLOG "\n----- START sample sub file from first good line of $run_list ---------------------------------------------------------------------------------------\n";
+			print SUBMITLOG qx(cat $sub_file_name);
+			print SUBMITLOG  "----- END   sample sub file from first good line of $run_list  --------------------------------------------------------------------------------------\n\n";
+			print qx(cat $sub_file_name);
+			print "Does this look ok?(y or n): ";
+			$user_check = getc;
+			chomp $user_check;
+			unless ($user_check eq "y")
+			{
+				print SUBMITLOG "you said [$user_check], so i assumed that the sample jsub did not look good, terminated at ".qx(date);
+				close(SUBMITLOG);
+				die "user terminated at ".qx(date);
+			}
+		}
+		$submit_this_job = qx(jsub -xml $sub_file_name);
+		if ( (!defined($submit_this_job)) || (($submit_this_job =~ /fail/i) || ($submit_this_job =~ /error/i)) )
+		{
+			$failed_run[$fail_count] = $run_num;
+			$fail_count++;
+			$job_status = "failed";
+		}
+		else
+		{ $job_status = "succeeded"; }
+		if (defined($submit_this_job))
+		{
+			if ($job_count == 1)
+			{ print $submit_this_job; }
+			print SUBMITLOG $submit_this_job;
+			print SUBMITLOG "--------------------------------------------------------------------------------------------\n";
+		}
+		print "job number $job_count, run number = $run_num, job submission probably $job_status at ".qx(date);
+		print SUBMITLOG "job number $job_count\t run number = $run_num \t job submission probably $job_status at ".qx(date);
+	}
+}
+close(RUNLIST);
+print "finished submitting $job_count jobs (with $fail_count possible failures) at ".qx(date);
+print SUBMITLOG "finished submitting $job_count jobs (with $fail_count possible failures) at ".qx(date);
+close(SUBMITLOG);

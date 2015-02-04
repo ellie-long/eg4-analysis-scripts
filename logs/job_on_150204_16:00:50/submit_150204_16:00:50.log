@@ -1,0 +1,1469 @@
+eg4_analysis /w/hallb/claseg4/ellie/analysis-scripts/inputs/run_check/run_check.cpp ./info_lists/all_runs.txt 	 started at 150204_16:00:50
+----- START contents of /w/hallb/claseg4/ellie/analysis-scripts/inputs/run_check/run_check.cpp ---------------------------------------------------------------------------------------
+#include <stdio.h>
+#include <stdlib.h>
+#include <iostream.h>
+#include <time.h>
+#include <math.h>
+using namespace std;
+
+void run_check()
+{
+	TStopwatch runAllTime;
+
+	// Set debug mode
+//	bool debug = true;
+	bool debug = false;
+
+	cout << "Running run_check()..." << endl;
+
+	if (debug) {cout << "Debug Mode On" << endl;}
+	else {cout << "Debug Mode Off" << endl;}
+
+	// Get runNumber from input.file
+	string line = "";
+	ifstream runNumberInputFile ("./input.file");
+	getline(runNumberInputFile, line);
+	int inRunNumber = atoi(line.c_str());
+	int runNumber = inRunNumber;
+	cout << "runNumber: " << runNumber << endl;
+
+	// Gets run information and passes it to the main
+	// workhorse script check_run
+	get_run_info(runNumber, runAllTime, debug);
+
+	// Get script run time
+	Double_t totTime  = runAllTime.RealTime(); runAllTime.Continue();
+	int totTimeDays		= floor(totTime/60/60/24);
+	int totTimeHours	= fmod((totTime/60/60.0),24);
+	int totTimeMinutes	= fmod((totTime/60.0),60);
+	double totTimeSeconds	= totTime - 24*60*60*totTimeDays - 60*60*totTimeHours - 60*totTimeMinutes;
+	cout << "Elapsed total time:              " << totTimeDays << " Days, " << totTimeHours << " Hours, " << totTimeMinutes << " Min., " << totTimeSeconds << " Sec." << endl;
+
+	cout << "Finished with run_check()!" << endl;
+	gROOT->ProcessLine(".q");
+	return;
+	cout << "Uh-oh? I shouldn't be here..." << endl;
+}
+
+
+// Gets run information and passes it to the workhorse script check_run
+void get_run_info(int runNumber, TStopwatch runInfoTime, bool debug)
+{
+	cout << "============================================================" << endl;
+	cout << "Running get_run_info(" << runNumber << ",runInfoTime)..." << endl;
+
+	// Gets file prefix for current runNumber
+	TString findCmd = "find /volatile/clas/claseg4/pass2 -name 'root_";
+	findCmd += runNumber;
+	findCmd += "_pass2.a00.root'";
+	TString fullFile = gSystem->GetFromPipe(findCmd);
+	TString filePrefix = fullFile.Remove(fullFile.Length()-25,fullFile.Length());
+
+	double e_beam;
+	TString e_beamStr;
+	TString target;
+	TString targetStr;
+	TString checkAll;
+	int sector = 1;
+	int maxSector = 7;
+
+	// Makes debug mode take far less time
+	if (debug) {sector = 6;}
+
+	// Get information based on file placement
+	if      (fullFile.Contains("1p1gev")) {e_beam = 1.1;}
+	else if (fullFile.Contains("1p3gev")) {e_beam = 1.3;}
+	else if (fullFile.Contains("1p5gev")) {e_beam = 1.5;}
+	else if (fullFile.Contains("2gev"))   {e_beam = 2.0;}
+	else if (fullFile.Contains("2p2gev")) {e_beam = 2.2;}
+	else if (fullFile.Contains("3gev"))   {e_beam = 3.0;}
+	else {cout << "ERR: Incorrect input." << endl; return;}
+
+	if (fullFile.Contains("carb"))     {target = "c12";}
+	else if (fullFile.Contains("nh3")) {target = "nh3";}
+	else if (fullFile.Contains("nd3")) {target = "nd3";}
+	else if (fullFile.Contains("emp")) {target = "empty";}
+	else {cout << "ERR: Incorrect input." << endl; return;}
+
+	// Run main workhorse script for each sector
+	for (int j=sector; j<maxSector; j++)
+	{
+		check_run(runNumber, e_beam, target, filePrefix, j, debug, runInfoTime);
+	}
+
+	cout << "Finished with get_run_info(" << runNumber << ",runInfoTime)!" << endl;
+	cout << "============================================================" << endl;
+	return;
+}
+
+// Main workhorse script
+void check_run(int runNumber, double e_beam, TString target, TString filePrefix, int sector, bool debug, TStopwatch allTime)
+{
+	cout << "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv" << endl;
+	cout << "Running check_run for Run # " << runNumber << ", Sector " << sector << "..." << endl;
+
+	TStopwatch thisRunTime;
+	TString fileName;
+	TChain* chain = new TChain("h10");
+	bool fileExists = false;
+	int aMax;	
+	char e_beamStr[3];
+	
+	// Stops e_beamStr from being more than 1 decimal place long
+	sprintf(e_beamStr,"%.1f",e_beam);
+
+	TString title = "Beam Energy = ";
+	title += e_beamStr;
+	title += " GeV, Target = ";
+	title += target;
+	title += ", Run # ";
+	title += runNumber;
+	title += ", Sector ";
+	title += sector;
+	
+	// Define cuts
+	TString cuts = "id==11 && dc_sect==";
+	cuts += sector;
+
+	if (debug) {aMax = 2; cout << "Debug Mode On" << endl;}
+	else {aMax = 1000; cout << "Debug Mode Off" << endl;}
+
+	// Beam energies below are taken from Xiaochao Zheng's EG4 analysis note:
+	// "Double- and Target Spin Asymmetries in
+	//  Pion Electro-production from Polarized NH3 Targets"
+	if (runNumber < 50724) {e_beam = 1.5190;}
+	else if (runNumber > 50723 && runNumber < 50989) {e_beam = 2.9990;}
+	else if (runNumber > 50988 && runNumber < 51155) {e_beam = 2.2596;}
+	else if (runNumber > 51154 && runNumber < 51407) {e_beam = 1.3390;}
+	else if (runNumber > 51406 && runNumber < 51487) {e_beam = 1.3376;}
+	else if (runNumber > 51486 && runNumber < 51791) {e_beam = 1.9889;}
+	else if (runNumber > 51790 && runNumber < 51871) {e_beam = 1.9932;}
+	else if (runNumber > 51874 && runNumber < 52041) {e_beam = 1.3369;}
+	else if (runNumber > 52050 && runNumber < 52296) {e_beam = 1.0539;}
+	else {cout << "ERR: Run number has no known beam energy. Skipping run." << endl; return;}
+
+
+	// Adds root files to chain
+	for (int a=0; a<aMax; a++)
+	{
+		fileName = filePrefix;
+		fileName += "root_";
+		fileName += runNumber;
+		fileName += "_pass2.a";
+		if (a < 10) {fileName += "0";}
+		fileName += a;
+		fileName += ".root";
+		ifstream ifile(fileName);
+		if (ifile)
+		{
+			cout << "Adding file to chain: " << fileName << endl;
+			chain->Add(fileName);
+			TFile file(fileName);
+			fileExists = true;
+		}
+		else
+		{
+			cout << "File " << fileName << " does not exist. Ending here." << endl;
+			a=999999999;
+		}
+	}
+
+	// Makes and displays kinematic variables
+	if (fileExists)
+	{
+		gStyle->SetPalette(1);
+
+		TCanvas *c1 = new TCanvas("c1","Run Check",1100,1100); //x,y
+		pad0  =  new  TPad("pad0","pad0",0.0000,0.9500,1.0000,1.0000,0,0,0);
+		pad1  =  new  TPad("pad1","pad1",0.0000,0.6333,0.3333,0.9500,0,0,0);
+		pad2  =  new  TPad("pad2","pad2",0.3333,0.6333,0.6666,0.9500,0,0,0);
+		pad3  =  new  TPad("pad3","pad3",0.6666,0.6333,1.0000,0.9500,0,0,0);
+		pad4  =  new  TPad("pad4","pad4",0.0000,0.3166,0.3333,0.6333,0,0,0);
+		pad5a =  new  TPad("pad5a","pad5a",0.3333,0.4749,0.6666,0.6333,0,0,0);
+		pad5b =  new  TPad("pad5b","pad5b",0.3333,0.3166,0.6666,0.4749,0,0,0);
+		pad6  =  new  TPad("pad6","pad6",0.6666,0.3166,1.0000,0.6333,0,0,0);
+		pad7  =  new  TPad("pad7","pad7",0.0000,0.0000,0.3333,0.3166,0,0,0);
+		pad8  =  new  TPad("pad8","pad8",0.3333,0.0000,0.6666,0.3166,0,0,0);
+		pad9  =  new  TPad("pad9","pad9",0.6666,0.0000,1.0000,0.3166,0,0,0);
+		pad1->Draw();pad2->Draw();pad3->Draw();pad4->Draw();pad5a->Draw();pad5b->Draw();
+		pad6->Draw();pad7->Draw();pad8->Draw();pad9->Draw();pad0->Draw();
+
+
+	
+		pad0->cd();
+		TPaveLabel *titleBox = new TPaveLabel(0.1,0.1,0.9,0.9,title);
+		titleBox->Draw();
+		titleBox->SetFillColor(kWhite);
+		pad0->Update();
+
+		pad1->cd();
+		TString titleRaster = "Raster x:y for Run # ";
+		titleRaster += runNumber;
+		cout << "Drawing " << titleRaster << "..."  << endl;
+		chain->Draw("raster_x:raster_y>>raster(100,2000,6000,100,2000,6000)", cuts, "");
+		raster->SetTitle(titleRaster);
+		raster->SetStats(kFALSE);
+		raster->Draw("COLZ");
+		pad1->Update();
+
+		pad2->cd();
+		TString titleTarget = "Vertex z for Run # ";
+		titleTarget += runNumber;
+		cout << "Drawing Vertex z..." << endl;
+		chain->Draw("dc_vz>>vertZ(400,-800,800)", cuts, "");
+		vertZ->SetTitle(titleTarget);
+		vertZ->Draw();
+		pad2->Update();
+
+		pad3->cd();
+		TString titleVThPh = "Vertex th:ph for Run # ";
+		titleVThPh += runNumber;
+		cout << "Drawing " << titleVThPh << "..." << endl;
+		chain->Draw("atan(dc_vx/dc_vy)*180/3.14159:acos(dc_vz/sqrt(dc_vx*dc_vx+dc_vy*dc_vy+dc_vz*dc_vz))*180/3.14159>>vThPh(300,0,180,300,-90,90)", cuts, "");
+		vThPh->SetTitle(titleVThPh);
+		vThPh->SetStats(kFALSE);
+		vThPh->Draw("COLZ");
+		pad3->Update();
+
+		pad4->cd();
+		TString titlebeamE = "Beam Energy for Run # ";
+		titlebeamE += runNumber;
+		cout << "Drawing " << titlebeamE << "..." << endl;
+		TString drawbeamE = "";
+		drawbeamE += e_beam;
+		drawbeamE += ">>beamE(100,0,4)";
+		chain->Draw(drawbeamE, cuts, "");
+		beamE->SetTitle(titlebeamE);
+	//	beamE->SetStats(kFALSE);
+		beamE->Draw();
+		pad4->Update();
+
+		pad5a->cd();
+		TString titleRThNphe = "Reconstructed Theta:nphe for Run # ";
+		titleRThNphe += runNumber;
+		cout << "Drawing " << titleRThNphe << "..."  << endl;
+		chain->Draw("dc_ccth:nphe>>rThNphe(100,0,500,100,0,60)", cuts, "");
+		rThNphe->SetTitle(titleRThNphe);
+		rThNphe->SetStats(kFALSE);
+		rThNphe->Draw("COLZ");
+		pad5a->Update();
+
+		pad5b->cd();
+		TString titleRPhNphe = "Reconstructed Phi:nphe for Run # ";
+		titleRPhNphe += runNumber;
+		cout << "Drawing " << titleRPhNphe << "..."  << endl;
+		chain->Draw("dc_ccph:nphe>>rPhNphe(100,0,500,100,-30,30)", cuts, "");
+		rPhNphe->SetTitle(titleRPhNphe);
+		rPhNphe->SetStats(kFALSE);
+		rPhNphe->Draw("COLZ");
+		pad5b->Update();
+
+		pad6->cd();
+		TString titleNu = "Nu for Run # ";
+		titleNu += runNumber;
+		cout << "Drawing " << titleNu << "..." << endl;
+		TString drawNu = "";
+		drawNu += e_beam;
+		drawNu += "-p>>histNu(100,-0.2,1.1)";
+		chain->Draw(drawNu, cuts, "");
+		histNu->SetTitle(titleNu);
+	//	histNu->SetStats(kFALSE);
+		histNu->Draw();
+		pad6->Update();
+
+		pad7->cd();
+		TString titleW2 = "W^2 for Run # ";
+		titleW2 += runNumber;
+		cout << "Drawing " << titleW2 << "..." << endl;
+		TString drawW2 = "0.938*0.938+2*0.938*(";
+		drawW2 += e_beam;
+		drawW2 += "-p)-4*";
+		drawW2 += e_beam;
+		drawW2 += "*p*(sin(dc_ccth*3.14159/180/2)^2)>>histW2(100,0,4)";
+		chain->Draw(drawW2, cuts, "");
+		histW2->SetTitle(titleW2);
+	//	histW2->SetStats(kFALSE);
+		histW2->Draw();
+		pad7->Update();
+
+		pad8->cd();
+		TString titleQ2 = "Q^2 for Run # ";
+		titleQ2 += runNumber;
+		cout << "Drawing " << titleQ2 << "..." << endl;
+		TString drawQ2 = "4*";
+		drawQ2 += e_beam;
+		drawQ2 += "*p*(sin(dc_ccth*3.14159/180/2)^2)>>histQ2(400,0,0.5)";
+		chain->Draw(drawQ2, cuts, "");
+		histQ2->SetTitle(titleQ2);
+		histQ2->Draw();
+		pad8->Update(); 
+
+		pad9->cd();
+//		pad9->SetLogy();
+		TString titlex = "Bjorken x ";
+		titlex += " (x=Q^2/[2m*nu]) for Run # ";
+		titlex += runNumber;
+		cout << "Drawing " << titlex << "..." << endl;
+		TString drawx = "4*";
+		drawx += e_beam;
+		drawx += "*p*(sin(dc_ccth*3.14159/180/2)^2)/(2*0.938*(";
+		drawx += e_beam;
+		drawx += "-p))>>histx(400,0,3)";
+		chain->Draw(drawx, cuts, "");
+		histx->SetTitle(titlex);
+		histx->Draw();
+		pad9->Update();
+
+
+		// Outputs file image
+//		TString imagename = "./Run_Checks/Run_Check_for_Sector_";
+		TString imagename = "./Run_Check_for_";
+		imagename += target;
+		imagename += "_Ebeam_";
+		imagename += e_beamStr;
+		imagename += "GeV_Sector_";
+		imagename += sector;
+		imagename += "_Run_";
+		imagename += runNumber;
+		imagename += ".png";
+		c1->Print(imagename);
+	}
+	else {cout << "There is no file for Run # " << runNumber << endl;}
+
+	// Stops code from automatically exiting to check that plots
+	// look good
+//	if (debug)
+	if (false)
+	{
+		TString exits;
+		cout << "Are you ready to finish?" << endl;
+		cin >> exits;
+	}
+
+
+	// Output elapsed time
+	Double_t thisTime = thisRunTime.RealTime(); thisRunTime.Reset();
+	Double_t totTime  = allTime.RealTime(); allTime.Continue();
+	int thisTimeDays	= floor(thisTime/60/60/24);
+	int thisTimeHours	= fmod((thisTime/60/60.0),24);
+	int thisTimeMinutes	= fmod((thisTime/60.0),60);
+	double thisTimeSeconds	= thisTime - 24*60*60*thisTimeDays - 60*60*thisTimeHours - 60*thisTimeMinutes;
+	int totTimeDays		= floor(totTime/60/60/24);
+	int totTimeHours	= fmod((totTime/60/60.0),24);
+	int totTimeMinutes	= fmod((totTime/60.0),60);
+	double totTimeSeconds	= totTime - 24*60*60*totTimeDays - 60*60*totTimeHours - 60*totTimeMinutes;
+	cout << "Elapsed time for current sector: " << thisTimeDays << " Days, " << thisTimeHours << " Hours, " << thisTimeMinutes << " Min., " << thisTimeSeconds << " Sec." << endl;
+	cout << "Elapsed total time:              " << totTimeDays << " Days, " << totTimeHours << " Hours, " << totTimeMinutes << " Min., " << totTimeSeconds << " Sec." << endl;
+
+	cout << "Finished check_run for Run # " << runNumber << "!" << endl;
+	cout << "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^" << endl;
+
+	return;
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+----- END contents of /w/hallb/claseg4/ellie/analysis-scripts/inputs/run_check/run_check.cpp ---------------------------------------------------------------------------------------
+
+opening run list and noting any problems by line number: 
+
+----- START sample sub file from first good line of ./info_lists/all_runs.txt ---------------------------------------------------------------------------------------
+<Request>
+	<Project name="eg4a"/>
+	<Track name="analysis"/>
+	<Name name="eg4_analysis_1_52054"/>
+	<OS name="centos65"/>
+	<Command><![CDATA[
+echo '\nellie@ifarm> date' > /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_52054.out
+date >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_52054.out
+echo '\nellie@ifarm> source /w/hallb/claseg4/ellie/analysis-scripts/inputs/set_environment_variables_for_vanalyzer.tcsh' >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_52054.out
+source /w/hallb/claseg4/ellie/analysis-scripts/inputs/set_environment_variables_for_vanalyzer.tcsh >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_52054.out
+echo '\nellie@ifarm> printenv' >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_52054.out
+printenv >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_52054.out
+echo '\nellie@ifarm> ls -ltr' >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_52054.out
+ls -ltr >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_52054.out
+echo '\nellie@ifarm> rm input.file' >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_52054.out
+rm input.file >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_52054.out
+echo '\nellie@ifarm> ls -ltr' >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_52054.out
+ls -ltr >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_52054.out
+echo '\nellie@ifarm> echo 52054 > input.file' >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_52054.out
+echo 52054 > input.file
+echo '\nellie@ifarm> cat input.file' >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_52054.out
+cat input.file >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_52054.out
+echo '\nellie@ifarm> analyzer run_check.cpp' >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_52054.out
+analyzer run_check.cpp >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_52054.out
+echo '\nellie@ifarm> cp *.png /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/.' >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_52054.out
+cp *.png /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/. >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_52054.out
+echo '\nellie@ifarm> ls -ltr' >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_52054.out
+ls -ltr >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_52054.out
+echo '\nellie@ifarm> date' >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_52054.out
+date >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_52054.out
+	]]></Command>
+
+	<DiskSpace space="15" unit="GB"/>
+
+	<Memory space="4" unit="GB"/>
+
+	<TimeLimit unit="hours" time="72"/>
+
+	<Input src="/w/hallb/claseg4/ellie/analysis-scripts/inputs/run_check/run_check.cpp" dest="run_check.cpp"/>
+
+	<Job>
+		<Stdout dest="/w/hallb/claseg4/ellie/analysis-scripts/logs/job_on_150204_16:00:50/eg4_run_check_52054.stdout"/>
+		<Stderr dest="/w/hallb/claseg4/ellie/analysis-scripts/logs/job_on_150204_16:00:50/eg4_run_check_52054.stderr"/>
+	</Job>
+
+</Request>
+----- END   sample sub file from first good line of ./info_lists/all_runs.txt  --------------------------------------------------------------------------------------
+
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092655</index><jobIndex>11529301</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 1	 run number = 52054 	 job submission probably succeeded at Wed Feb  4 16:01:04 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092658</index><jobIndex>11529304</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 2	 run number = 52216 	 job submission probably succeeded at Wed Feb  4 16:01:08 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092660</index><jobIndex>11529306</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 3	 run number = 52275 	 job submission probably succeeded at Wed Feb  4 16:01:12 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092662</index><jobIndex>11529308</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 4	 run number = 52295 	 job submission probably succeeded at Wed Feb  4 16:01:16 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092664</index><jobIndex>11529310</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 5	 run number = 52077 	 job submission probably succeeded at Wed Feb  4 16:01:20 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092665</index><jobIndex>11529311</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 6	 run number = 52080 	 job submission probably succeeded at Wed Feb  4 16:01:23 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092668</index><jobIndex>11529314</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 7	 run number = 52081 	 job submission probably succeeded at Wed Feb  4 16:01:32 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092671</index><jobIndex>11529317</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 8	 run number = 52082 	 job submission probably succeeded at Wed Feb  4 16:01:41 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092673</index><jobIndex>11529319</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 9	 run number = 52083 	 job submission probably succeeded at Wed Feb  4 16:01:44 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092675</index><jobIndex>11529321</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 10	 run number = 52084 	 job submission probably succeeded at Wed Feb  4 16:01:48 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092678</index><jobIndex>11529324</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 11	 run number = 52085 	 job submission probably succeeded at Wed Feb  4 16:01:57 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092679</index><jobIndex>11529325</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 12	 run number = 52120 	 job submission probably succeeded at Wed Feb  4 16:02:01 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092681</index><jobIndex>11529327</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 13	 run number = 52121 	 job submission probably succeeded at Wed Feb  4 16:02:04 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092683</index><jobIndex>11529329</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 14	 run number = 52131 	 job submission probably succeeded at Wed Feb  4 16:02:08 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092685</index><jobIndex>11529331</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 15	 run number = 52132 	 job submission probably succeeded at Wed Feb  4 16:02:12 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092687</index><jobIndex>11529333</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 16	 run number = 52133 	 job submission probably succeeded at Wed Feb  4 16:02:16 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092688</index><jobIndex>11529334</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 17	 run number = 52134 	 job submission probably succeeded at Wed Feb  4 16:02:19 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092690</index><jobIndex>11529336</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 18	 run number = 52135 	 job submission probably succeeded at Wed Feb  4 16:02:23 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092692</index><jobIndex>11529338</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 19	 run number = 52136 	 job submission probably succeeded at Wed Feb  4 16:02:27 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092694</index><jobIndex>11529340</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 20	 run number = 52139 	 job submission probably succeeded at Wed Feb  4 16:02:31 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092696</index><jobIndex>11529342</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 21	 run number = 52149 	 job submission probably succeeded at Wed Feb  4 16:02:35 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092698</index><jobIndex>11529344</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 22	 run number = 52150 	 job submission probably succeeded at Wed Feb  4 16:02:39 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092699</index><jobIndex>11529345</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 23	 run number = 52153 	 job submission probably succeeded at Wed Feb  4 16:02:43 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092701</index><jobIndex>11529347</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 24	 run number = 52154 	 job submission probably succeeded at Wed Feb  4 16:02:47 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092703</index><jobIndex>11529349</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 25	 run number = 52155 	 job submission probably succeeded at Wed Feb  4 16:02:51 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092705</index><jobIndex>11529351</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 26	 run number = 52156 	 job submission probably succeeded at Wed Feb  4 16:02:56 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092707</index><jobIndex>11529353</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 27	 run number = 52157 	 job submission probably succeeded at Wed Feb  4 16:03:00 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092708</index><jobIndex>11529354</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 28	 run number = 52158 	 job submission probably succeeded at Wed Feb  4 16:03:05 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092710</index><jobIndex>11529356</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 29	 run number = 52159 	 job submission probably succeeded at Wed Feb  4 16:03:09 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092712</index><jobIndex>11529358</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 30	 run number = 52160 	 job submission probably succeeded at Wed Feb  4 16:03:13 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092714</index><jobIndex>11529360</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 31	 run number = 52161 	 job submission probably succeeded at Wed Feb  4 16:03:17 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092716</index><jobIndex>11529362</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 32	 run number = 52164 	 job submission probably succeeded at Wed Feb  4 16:03:21 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092718</index><jobIndex>11529364</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 33	 run number = 52165 	 job submission probably succeeded at Wed Feb  4 16:03:26 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092720</index><jobIndex>11529366</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 34	 run number = 52167 	 job submission probably succeeded at Wed Feb  4 16:03:30 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092722</index><jobIndex>11529368</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 35	 run number = 52173 	 job submission probably succeeded at Wed Feb  4 16:03:35 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092723</index><jobIndex>11529369</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 36	 run number = 52176 	 job submission probably succeeded at Wed Feb  4 16:03:39 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092725</index><jobIndex>11529371</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 37	 run number = 52179 	 job submission probably succeeded at Wed Feb  4 16:03:43 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092726</index><jobIndex>11529372</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 38	 run number = 52182 	 job submission probably succeeded at Wed Feb  4 16:03:47 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092728</index><jobIndex>11529374</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 39	 run number = 52185 	 job submission probably succeeded at Wed Feb  4 16:03:51 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092729</index><jobIndex>11529375</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 40	 run number = 52186 	 job submission probably succeeded at Wed Feb  4 16:03:55 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092731</index><jobIndex>11529377</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 41	 run number = 52188 	 job submission probably succeeded at Wed Feb  4 16:03:59 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092733</index><jobIndex>11529379</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 42	 run number = 52193 	 job submission probably succeeded at Wed Feb  4 16:04:02 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092735</index><jobIndex>11529381</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 43	 run number = 52200 	 job submission probably succeeded at Wed Feb  4 16:04:07 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092737</index><jobIndex>11529383</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 44	 run number = 52202 	 job submission probably succeeded at Wed Feb  4 16:04:10 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092739</index><jobIndex>11529385</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 45	 run number = 52203 	 job submission probably succeeded at Wed Feb  4 16:04:14 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092740</index><jobIndex>11529386</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 46	 run number = 52204 	 job submission probably succeeded at Wed Feb  4 16:04:18 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092742</index><jobIndex>11529388</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 47	 run number = 52205 	 job submission probably succeeded at Wed Feb  4 16:04:22 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092744</index><jobIndex>11529390</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 48	 run number = 52206 	 job submission probably succeeded at Wed Feb  4 16:04:26 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092746</index><jobIndex>11529392</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 49	 run number = 52207 	 job submission probably succeeded at Wed Feb  4 16:04:30 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092755</index><jobIndex>11529401</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 50	 run number = 52208 	 job submission probably succeeded at Wed Feb  4 16:05:06 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092758</index><jobIndex>11529404</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 51	 run number = 52209 	 job submission probably succeeded at Wed Feb  4 16:05:16 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092760</index><jobIndex>11529406</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 52	 run number = 52210 	 job submission probably succeeded at Wed Feb  4 16:05:20 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092762</index><jobIndex>11529408</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 53	 run number = 52211 	 job submission probably succeeded at Wed Feb  4 16:05:25 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092764</index><jobIndex>11529410</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 54	 run number = 52212 	 job submission probably succeeded at Wed Feb  4 16:05:33 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092767</index><jobIndex>11529413</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 55	 run number = 52213 	 job submission probably succeeded at Wed Feb  4 16:05:41 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092770</index><jobIndex>11529416</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 56	 run number = 52214 	 job submission probably succeeded at Wed Feb  4 16:05:52 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092772</index><jobIndex>11529418</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 57	 run number = 52224 	 job submission probably succeeded at Wed Feb  4 16:05:57 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092774</index><jobIndex>11529420</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 58	 run number = 52225 	 job submission probably succeeded at Wed Feb  4 16:06:01 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092776</index><jobIndex>11529422</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 59	 run number = 52226 	 job submission probably succeeded at Wed Feb  4 16:06:05 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092778</index><jobIndex>11529424</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 60	 run number = 52227 	 job submission probably succeeded at Wed Feb  4 16:06:09 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092780</index><jobIndex>11529426</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 61	 run number = 52228 	 job submission probably succeeded at Wed Feb  4 16:06:13 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092782</index><jobIndex>11529428</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 62	 run number = 52229 	 job submission probably succeeded at Wed Feb  4 16:06:17 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092784</index><jobIndex>11529430</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 63	 run number = 52230 	 job submission probably succeeded at Wed Feb  4 16:06:21 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092785</index><jobIndex>11529431</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 64	 run number = 52231 	 job submission probably succeeded at Wed Feb  4 16:06:25 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092787</index><jobIndex>11529433</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 65	 run number = 52232 	 job submission probably succeeded at Wed Feb  4 16:06:28 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092789</index><jobIndex>11529435</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 66	 run number = 52233 	 job submission probably succeeded at Wed Feb  4 16:06:32 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092791</index><jobIndex>11529437</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 67	 run number = 52234 	 job submission probably succeeded at Wed Feb  4 16:06:36 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092793</index><jobIndex>11529439</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 68	 run number = 52235 	 job submission probably succeeded at Wed Feb  4 16:06:40 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092794</index><jobIndex>11529440</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 69	 run number = 52237 	 job submission probably succeeded at Wed Feb  4 16:06:43 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092796</index><jobIndex>11529442</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 70	 run number = 52238 	 job submission probably succeeded at Wed Feb  4 16:06:48 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092798</index><jobIndex>11529444</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 71	 run number = 52239 	 job submission probably succeeded at Wed Feb  4 16:06:51 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092800</index><jobIndex>11529446</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 72	 run number = 52240 	 job submission probably succeeded at Wed Feb  4 16:06:55 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092802</index><jobIndex>11529448</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 73	 run number = 52241 	 job submission probably succeeded at Wed Feb  4 16:06:59 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092804</index><jobIndex>11529450</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 74	 run number = 52242 	 job submission probably succeeded at Wed Feb  4 16:07:03 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092805</index><jobIndex>11529451</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 75	 run number = 52243 	 job submission probably succeeded at Wed Feb  4 16:07:07 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092807</index><jobIndex>11529453</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 76	 run number = 52244 	 job submission probably succeeded at Wed Feb  4 16:07:11 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092809</index><jobIndex>11529455</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 77	 run number = 52245 	 job submission probably succeeded at Wed Feb  4 16:07:14 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092810</index><jobIndex>11529456</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 78	 run number = 52246 	 job submission probably succeeded at Wed Feb  4 16:07:18 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092812</index><jobIndex>11529458</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 79	 run number = 52247 	 job submission probably succeeded at Wed Feb  4 16:07:22 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092815</index><jobIndex>11529461</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 80	 run number = 52248 	 job submission probably succeeded at Wed Feb  4 16:07:31 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092817</index><jobIndex>11529463</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 81	 run number = 52249 	 job submission probably succeeded at Wed Feb  4 16:07:35 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092819</index><jobIndex>11529465</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 82	 run number = 52250 	 job submission probably succeeded at Wed Feb  4 16:07:39 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092821</index><jobIndex>11529467</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 83	 run number = 52251 	 job submission probably succeeded at Wed Feb  4 16:07:43 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092823</index><jobIndex>11529469</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 84	 run number = 52252 	 job submission probably succeeded at Wed Feb  4 16:07:47 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092824</index><jobIndex>11529470</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 85	 run number = 52253 	 job submission probably succeeded at Wed Feb  4 16:07:51 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092826</index><jobIndex>11529472</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 86	 run number = 52254 	 job submission probably succeeded at Wed Feb  4 16:07:55 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092828</index><jobIndex>11529474</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 87	 run number = 52255 	 job submission probably succeeded at Wed Feb  4 16:07:58 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092830</index><jobIndex>11529476</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 88	 run number = 52256 	 job submission probably succeeded at Wed Feb  4 16:08:02 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092831</index><jobIndex>11529477</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 89	 run number = 52257 	 job submission probably succeeded at Wed Feb  4 16:08:06 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092833</index><jobIndex>11529479</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 90	 run number = 52258 	 job submission probably succeeded at Wed Feb  4 16:08:10 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092835</index><jobIndex>11529481</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 91	 run number = 52259 	 job submission probably succeeded at Wed Feb  4 16:08:14 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092837</index><jobIndex>11529483</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 92	 run number = 52260 	 job submission probably succeeded at Wed Feb  4 16:08:18 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092839</index><jobIndex>11529485</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 93	 run number = 52261 	 job submission probably succeeded at Wed Feb  4 16:08:22 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092841</index><jobIndex>11529487</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 94	 run number = 52262 	 job submission probably succeeded at Wed Feb  4 16:08:25 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092842</index><jobIndex>11529488</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 95	 run number = 52263 	 job submission probably succeeded at Wed Feb  4 16:08:29 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092844</index><jobIndex>11529490</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 96	 run number = 52264 	 job submission probably succeeded at Wed Feb  4 16:08:33 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092846</index><jobIndex>11529492</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 97	 run number = 52265 	 job submission probably succeeded at Wed Feb  4 16:08:36 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092848</index><jobIndex>11529494</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 98	 run number = 52266 	 job submission probably succeeded at Wed Feb  4 16:08:40 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092849</index><jobIndex>11529495</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 99	 run number = 52267 	 job submission probably succeeded at Wed Feb  4 16:08:44 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092851</index><jobIndex>11529497</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 100	 run number = 52268 	 job submission probably succeeded at Wed Feb  4 16:08:48 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092853</index><jobIndex>11529499</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 101	 run number = 52269 	 job submission probably succeeded at Wed Feb  4 16:08:51 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092855</index><jobIndex>11529501</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 102	 run number = 52270 	 job submission probably succeeded at Wed Feb  4 16:08:55 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092857</index><jobIndex>11529503</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 103	 run number = 52271 	 job submission probably succeeded at Wed Feb  4 16:08:59 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092859</index><jobIndex>11529505</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 104	 run number = 52272 	 job submission probably succeeded at Wed Feb  4 16:09:04 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092861</index><jobIndex>11529507</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 105	 run number = 52273 	 job submission probably succeeded at Wed Feb  4 16:09:08 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092862</index><jobIndex>11529508</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 106	 run number = 52274 	 job submission probably succeeded at Wed Feb  4 16:09:12 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092864</index><jobIndex>11529510</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 107	 run number = 52277 	 job submission probably succeeded at Wed Feb  4 16:09:16 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092866</index><jobIndex>11529512</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 108	 run number = 52278 	 job submission probably succeeded at Wed Feb  4 16:09:20 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092868</index><jobIndex>11529514</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 109	 run number = 52279 	 job submission probably succeeded at Wed Feb  4 16:09:24 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092870</index><jobIndex>11529516</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 110	 run number = 52280 	 job submission probably succeeded at Wed Feb  4 16:09:27 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092873</index><jobIndex>11529519</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 111	 run number = 52281 	 job submission probably succeeded at Wed Feb  4 16:09:32 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092875</index><jobIndex>11529521</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 112	 run number = 52282 	 job submission probably succeeded at Wed Feb  4 16:09:35 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092876</index><jobIndex>11529522</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 113	 run number = 52283 	 job submission probably succeeded at Wed Feb  4 16:09:39 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092878</index><jobIndex>11529524</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 114	 run number = 52284 	 job submission probably succeeded at Wed Feb  4 16:09:43 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092881</index><jobIndex>11529527</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 115	 run number = 52285 	 job submission probably succeeded at Wed Feb  4 16:09:52 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092883</index><jobIndex>11529529</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 116	 run number = 52286 	 job submission probably succeeded at Wed Feb  4 16:09:56 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092884</index><jobIndex>11529530</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 117	 run number = 52287 	 job submission probably succeeded at Wed Feb  4 16:09:59 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092886</index><jobIndex>11529532</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 118	 run number = 52288 	 job submission probably succeeded at Wed Feb  4 16:10:03 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092888</index><jobIndex>11529534</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 119	 run number = 52289 	 job submission probably succeeded at Wed Feb  4 16:10:07 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092890</index><jobIndex>11529536</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 120	 run number = 51222 	 job submission probably succeeded at Wed Feb  4 16:10:11 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092891</index><jobIndex>11529537</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 121	 run number = 51957 	 job submission probably succeeded at Wed Feb  4 16:10:14 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092893</index><jobIndex>11529539</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 122	 run number = 51244 	 job submission probably succeeded at Wed Feb  4 16:10:18 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092895</index><jobIndex>11529541</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 123	 run number = 51273 	 job submission probably succeeded at Wed Feb  4 16:10:22 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092897</index><jobIndex>11529543</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 124	 run number = 51274 	 job submission probably succeeded at Wed Feb  4 16:10:26 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092898</index><jobIndex>11529544</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 125	 run number = 51315 	 job submission probably succeeded at Wed Feb  4 16:10:31 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092900</index><jobIndex>11529546</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 126	 run number = 51317 	 job submission probably succeeded at Wed Feb  4 16:10:35 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092902</index><jobIndex>11529548</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 127	 run number = 51332 	 job submission probably succeeded at Wed Feb  4 16:10:39 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092904</index><jobIndex>11529550</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 128	 run number = 51333 	 job submission probably succeeded at Wed Feb  4 16:10:43 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092906</index><jobIndex>11529552</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 129	 run number = 51390 	 job submission probably succeeded at Wed Feb  4 16:10:46 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092907</index><jobIndex>11529553</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 130	 run number = 51407 	 job submission probably succeeded at Wed Feb  4 16:10:50 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092909</index><jobIndex>11529555</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 131	 run number = 51413 	 job submission probably succeeded at Wed Feb  4 16:10:54 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092911</index><jobIndex>11529557</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 132	 run number = 51886 	 job submission probably succeeded at Wed Feb  4 16:10:57 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092913</index><jobIndex>11529559</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 133	 run number = 51890 	 job submission probably succeeded at Wed Feb  4 16:11:01 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092915</index><jobIndex>11529561</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 134	 run number = 52019 	 job submission probably succeeded at Wed Feb  4 16:11:05 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092917</index><jobIndex>11529563</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 135	 run number = 52022 	 job submission probably succeeded at Wed Feb  4 16:11:10 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092919</index><jobIndex>11529565</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 136	 run number = 51896 	 job submission probably succeeded at Wed Feb  4 16:11:14 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092920</index><jobIndex>11529566</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 137	 run number = 51897 	 job submission probably succeeded at Wed Feb  4 16:11:18 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092922</index><jobIndex>11529568</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 138	 run number = 51898 	 job submission probably succeeded at Wed Feb  4 16:11:21 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092924</index><jobIndex>11529570</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 139	 run number = 51899 	 job submission probably succeeded at Wed Feb  4 16:11:25 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092926</index><jobIndex>11529572</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 140	 run number = 51900 	 job submission probably succeeded at Wed Feb  4 16:11:34 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092927</index><jobIndex>11529573</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 141	 run number = 51906 	 job submission probably succeeded at Wed Feb  4 16:11:37 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092928</index><jobIndex>11529574</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 142	 run number = 51907 	 job submission probably succeeded at Wed Feb  4 16:11:41 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092930</index><jobIndex>11529576</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 143	 run number = 51908 	 job submission probably succeeded at Wed Feb  4 16:11:45 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092931</index><jobIndex>11529577</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 144	 run number = 51909 	 job submission probably succeeded at Wed Feb  4 16:11:49 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092933</index><jobIndex>11529579</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 145	 run number = 51911 	 job submission probably succeeded at Wed Feb  4 16:11:52 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092935</index><jobIndex>11529581</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 146	 run number = 51913 	 job submission probably succeeded at Wed Feb  4 16:11:56 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092937</index><jobIndex>11529583</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 147	 run number = 51915 	 job submission probably succeeded at Wed Feb  4 16:12:00 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092940</index><jobIndex>11529586</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 148	 run number = 51916 	 job submission probably succeeded at Wed Feb  4 16:12:09 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092941</index><jobIndex>11529587</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 149	 run number = 51917 	 job submission probably succeeded at Wed Feb  4 16:12:13 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092943</index><jobIndex>11529589</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 150	 run number = 51918 	 job submission probably succeeded at Wed Feb  4 16:12:17 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092945</index><jobIndex>11529591</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 151	 run number = 51919 	 job submission probably succeeded at Wed Feb  4 16:12:21 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092947</index><jobIndex>11529593</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 152	 run number = 51920 	 job submission probably succeeded at Wed Feb  4 16:12:24 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092949</index><jobIndex>11529595</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 153	 run number = 51921 	 job submission probably succeeded at Wed Feb  4 16:12:28 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092950</index><jobIndex>11529596</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 154	 run number = 51922 	 job submission probably succeeded at Wed Feb  4 16:12:32 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092952</index><jobIndex>11529598</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 155	 run number = 51928 	 job submission probably succeeded at Wed Feb  4 16:12:35 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092954</index><jobIndex>11529600</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 156	 run number = 51930 	 job submission probably succeeded at Wed Feb  4 16:12:39 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092956</index><jobIndex>11529602</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 157	 run number = 51931 	 job submission probably succeeded at Wed Feb  4 16:12:43 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092957</index><jobIndex>11529603</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 158	 run number = 51932 	 job submission probably succeeded at Wed Feb  4 16:12:47 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092959</index><jobIndex>11529605</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 159	 run number = 51933 	 job submission probably succeeded at Wed Feb  4 16:12:50 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092961</index><jobIndex>11529607</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 160	 run number = 51934 	 job submission probably succeeded at Wed Feb  4 16:12:54 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092963</index><jobIndex>11529609</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 161	 run number = 51935 	 job submission probably succeeded at Wed Feb  4 16:12:58 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092964</index><jobIndex>11529610</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 162	 run number = 51936 	 job submission probably succeeded at Wed Feb  4 16:13:01 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092966</index><jobIndex>11529612</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 163	 run number = 51938 	 job submission probably succeeded at Wed Feb  4 16:13:05 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092968</index><jobIndex>11529614</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 164	 run number = 51939 	 job submission probably succeeded at Wed Feb  4 16:13:09 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092969</index><jobIndex>11529615</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 165	 run number = 51940 	 job submission probably succeeded at Wed Feb  4 16:13:13 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092970</index><jobIndex>11529616</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 166	 run number = 51941 	 job submission probably succeeded at Wed Feb  4 16:13:17 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092971</index><jobIndex>11529617</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 167	 run number = 51942 	 job submission probably succeeded at Wed Feb  4 16:13:21 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092973</index><jobIndex>11529619</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 168	 run number = 51943 	 job submission probably succeeded at Wed Feb  4 16:13:25 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092975</index><jobIndex>11529621</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 169	 run number = 51944 	 job submission probably succeeded at Wed Feb  4 16:13:29 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092977</index><jobIndex>11529623</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 170	 run number = 51945 	 job submission probably succeeded at Wed Feb  4 16:13:33 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092978</index><jobIndex>11529624</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 171	 run number = 51946 	 job submission probably succeeded at Wed Feb  4 16:13:37 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092980</index><jobIndex>11529626</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 172	 run number = 51947 	 job submission probably succeeded at Wed Feb  4 16:13:41 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092982</index><jobIndex>11529628</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 173	 run number = 51948 	 job submission probably succeeded at Wed Feb  4 16:13:44 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092984</index><jobIndex>11529630</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 174	 run number = 51949 	 job submission probably succeeded at Wed Feb  4 16:13:48 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092985</index><jobIndex>11529631</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 175	 run number = 51950 	 job submission probably succeeded at Wed Feb  4 16:13:52 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092987</index><jobIndex>11529633</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 176	 run number = 51951 	 job submission probably succeeded at Wed Feb  4 16:13:56 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092989</index><jobIndex>11529635</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 177	 run number = 51952 	 job submission probably succeeded at Wed Feb  4 16:14:00 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092991</index><jobIndex>11529637</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 178	 run number = 51953 	 job submission probably succeeded at Wed Feb  4 16:14:04 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092993</index><jobIndex>11529639</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 179	 run number = 51954 	 job submission probably succeeded at Wed Feb  4 16:14:09 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092995</index><jobIndex>11529641</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 180	 run number = 51959 	 job submission probably succeeded at Wed Feb  4 16:14:13 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092997</index><jobIndex>11529643</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 181	 run number = 51960 	 job submission probably succeeded at Wed Feb  4 16:14:18 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7092999</index><jobIndex>11529645</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 182	 run number = 51961 	 job submission probably succeeded at Wed Feb  4 16:14:22 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093001</index><jobIndex>11529647</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 183	 run number = 51964 	 job submission probably succeeded at Wed Feb  4 16:14:26 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093003</index><jobIndex>11529649</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 184	 run number = 51965 	 job submission probably succeeded at Wed Feb  4 16:14:30 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093004</index><jobIndex>11529650</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 185	 run number = 51967 	 job submission probably succeeded at Wed Feb  4 16:14:33 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093006</index><jobIndex>11529652</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 186	 run number = 51968 	 job submission probably succeeded at Wed Feb  4 16:14:37 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093008</index><jobIndex>11529654</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 187	 run number = 51969 	 job submission probably succeeded at Wed Feb  4 16:14:41 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093009</index><jobIndex>11529655</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 188	 run number = 51970 	 job submission probably succeeded at Wed Feb  4 16:14:45 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093010</index><jobIndex>11529656</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 189	 run number = 51971 	 job submission probably succeeded at Wed Feb  4 16:14:49 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093011</index><jobIndex>11529657</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 190	 run number = 51973 	 job submission probably succeeded at Wed Feb  4 16:14:52 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093013</index><jobIndex>11529659</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 191	 run number = 51974 	 job submission probably succeeded at Wed Feb  4 16:14:56 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093015</index><jobIndex>11529661</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 192	 run number = 51975 	 job submission probably succeeded at Wed Feb  4 16:15:00 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093016</index><jobIndex>11529662</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 193	 run number = 51976 	 job submission probably succeeded at Wed Feb  4 16:15:03 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093018</index><jobIndex>11529664</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 194	 run number = 51977 	 job submission probably succeeded at Wed Feb  4 16:15:07 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093020</index><jobIndex>11529666</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 195	 run number = 51978 	 job submission probably succeeded at Wed Feb  4 16:15:10 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093022</index><jobIndex>11529668</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 196	 run number = 51979 	 job submission probably succeeded at Wed Feb  4 16:15:14 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093023</index><jobIndex>11529669</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 197	 run number = 51980 	 job submission probably succeeded at Wed Feb  4 16:15:18 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093025</index><jobIndex>11529671</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 198	 run number = 51981 	 job submission probably succeeded at Wed Feb  4 16:15:22 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093027</index><jobIndex>11529673</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 199	 run number = 51982 	 job submission probably succeeded at Wed Feb  4 16:15:25 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093029</index><jobIndex>11529675</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 200	 run number = 51983 	 job submission probably succeeded at Wed Feb  4 16:15:29 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093031</index><jobIndex>11529677</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 201	 run number = 51984 	 job submission probably succeeded at Wed Feb  4 16:15:33 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093032</index><jobIndex>11529678</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 202	 run number = 51985 	 job submission probably succeeded at Wed Feb  4 16:15:37 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093034</index><jobIndex>11529680</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 203	 run number = 51986 	 job submission probably succeeded at Wed Feb  4 16:15:41 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093036</index><jobIndex>11529682</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 204	 run number = 51987 	 job submission probably succeeded at Wed Feb  4 16:15:44 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093038</index><jobIndex>11529684</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 205	 run number = 51988 	 job submission probably succeeded at Wed Feb  4 16:15:48 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093039</index><jobIndex>11529685</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 206	 run number = 51989 	 job submission probably succeeded at Wed Feb  4 16:15:52 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093041</index><jobIndex>11529687</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 207	 run number = 51990 	 job submission probably succeeded at Wed Feb  4 16:15:56 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093043</index><jobIndex>11529689</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 208	 run number = 51991 	 job submission probably succeeded at Wed Feb  4 16:15:59 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093045</index><jobIndex>11529691</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 209	 run number = 51992 	 job submission probably succeeded at Wed Feb  4 16:16:03 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093047</index><jobIndex>11529693</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 210	 run number = 51993 	 job submission probably succeeded at Wed Feb  4 16:16:07 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093049</index><jobIndex>11529695</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 211	 run number = 51994 	 job submission probably succeeded at Wed Feb  4 16:16:11 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093051</index><jobIndex>11529697</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 212	 run number = 51995 	 job submission probably succeeded at Wed Feb  4 16:16:15 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093052</index><jobIndex>11529698</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 213	 run number = 51996 	 job submission probably succeeded at Wed Feb  4 16:16:18 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093054</index><jobIndex>11529700</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 214	 run number = 51998 	 job submission probably succeeded at Wed Feb  4 16:16:22 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093056</index><jobIndex>11529702</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 215	 run number = 51999 	 job submission probably succeeded at Wed Feb  4 16:16:26 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093058</index><jobIndex>11529704</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 216	 run number = 52000 	 job submission probably succeeded at Wed Feb  4 16:16:30 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093059</index><jobIndex>11529705</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 217	 run number = 52001 	 job submission probably succeeded at Wed Feb  4 16:16:33 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093061</index><jobIndex>11529707</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 218	 run number = 52002 	 job submission probably succeeded at Wed Feb  4 16:16:37 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093063</index><jobIndex>11529709</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 219	 run number = 52003 	 job submission probably succeeded at Wed Feb  4 16:16:41 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093065</index><jobIndex>11529711</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 220	 run number = 52004 	 job submission probably succeeded at Wed Feb  4 16:16:45 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093066</index><jobIndex>11529712</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 221	 run number = 52005 	 job submission probably succeeded at Wed Feb  4 16:16:48 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093067</index><jobIndex>11529713</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 222	 run number = 52006 	 job submission probably succeeded at Wed Feb  4 16:16:52 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093068</index><jobIndex>11529714</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 223	 run number = 52007 	 job submission probably succeeded at Wed Feb  4 16:16:56 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093069</index><jobIndex>11529715</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 224	 run number = 52008 	 job submission probably succeeded at Wed Feb  4 16:16:59 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093071</index><jobIndex>11529717</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 225	 run number = 52009 	 job submission probably succeeded at Wed Feb  4 16:17:03 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093074</index><jobIndex>11529720</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 226	 run number = 52010 	 job submission probably succeeded at Wed Feb  4 16:17:15 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093076</index><jobIndex>11529722</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 227	 run number = 52011 	 job submission probably succeeded at Wed Feb  4 16:17:19 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093078</index><jobIndex>11529724</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 228	 run number = 52012 	 job submission probably succeeded at Wed Feb  4 16:17:28 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093079</index><jobIndex>11529725</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 229	 run number = 52013 	 job submission probably succeeded at Wed Feb  4 16:17:32 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093080</index><jobIndex>11529726</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 230	 run number = 52014 	 job submission probably succeeded at Wed Feb  4 16:17:35 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093081</index><jobIndex>11529727</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 231	 run number = 52015 	 job submission probably succeeded at Wed Feb  4 16:17:39 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093082</index><jobIndex>11529728</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 232	 run number = 52016 	 job submission probably succeeded at Wed Feb  4 16:17:43 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093084</index><jobIndex>11529730</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 233	 run number = 52017 	 job submission probably succeeded at Wed Feb  4 16:17:47 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093086</index><jobIndex>11529732</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 234	 run number = 52024 	 job submission probably succeeded at Wed Feb  4 16:17:51 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093088</index><jobIndex>11529734</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 235	 run number = 52025 	 job submission probably succeeded at Wed Feb  4 16:17:55 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093090</index><jobIndex>11529736</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 236	 run number = 52026 	 job submission probably succeeded at Wed Feb  4 16:17:59 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093091</index><jobIndex>11529737</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 237	 run number = 52027 	 job submission probably succeeded at Wed Feb  4 16:18:02 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093092</index><jobIndex>11529738</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 238	 run number = 52028 	 job submission probably succeeded at Wed Feb  4 16:18:06 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093093</index><jobIndex>11529739</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 239	 run number = 52029 	 job submission probably succeeded at Wed Feb  4 16:18:10 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093095</index><jobIndex>11529741</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 240	 run number = 52030 	 job submission probably succeeded at Wed Feb  4 16:18:14 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093097</index><jobIndex>11529743</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 241	 run number = 52031 	 job submission probably succeeded at Wed Feb  4 16:18:18 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093099</index><jobIndex>11529745</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 242	 run number = 52032 	 job submission probably succeeded at Wed Feb  4 16:18:22 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093100</index><jobIndex>11529746</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 243	 run number = 52033 	 job submission probably succeeded at Wed Feb  4 16:18:25 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093101</index><jobIndex>11529747</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 244	 run number = 52034 	 job submission probably succeeded at Wed Feb  4 16:18:29 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093102</index><jobIndex>11529748</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 245	 run number = 52035 	 job submission probably succeeded at Wed Feb  4 16:18:34 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093104</index><jobIndex>11529750</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 246	 run number = 52036 	 job submission probably succeeded at Wed Feb  4 16:18:38 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093105</index><jobIndex>11529751</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 247	 run number = 52037 	 job submission probably succeeded at Wed Feb  4 16:18:42 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093106</index><jobIndex>11529752</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 248	 run number = 52038 	 job submission probably succeeded at Wed Feb  4 16:18:46 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093107</index><jobIndex>11529753</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 249	 run number = 52039 	 job submission probably succeeded at Wed Feb  4 16:18:50 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093108</index><jobIndex>11529754</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 250	 run number = 52040 	 job submission probably succeeded at Wed Feb  4 16:18:54 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093109</index><jobIndex>11529755</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 251	 run number = 51181 	 job submission probably succeeded at Wed Feb  4 16:18:57 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093110</index><jobIndex>11529756</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 252	 run number = 51182 	 job submission probably succeeded at Wed Feb  4 16:19:01 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093111</index><jobIndex>11529757</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 253	 run number = 51192 	 job submission probably succeeded at Wed Feb  4 16:19:05 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093112</index><jobIndex>11529758</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 254	 run number = 51193 	 job submission probably succeeded at Wed Feb  4 16:19:09 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093113</index><jobIndex>11529759</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 255	 run number = 51194 	 job submission probably succeeded at Wed Feb  4 16:19:13 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093114</index><jobIndex>11529760</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 256	 run number = 51196 	 job submission probably succeeded at Wed Feb  4 16:19:17 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093116</index><jobIndex>11529762</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 257	 run number = 51197 	 job submission probably succeeded at Wed Feb  4 16:19:21 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093118</index><jobIndex>11529764</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 258	 run number = 51198 	 job submission probably succeeded at Wed Feb  4 16:19:25 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093120</index><jobIndex>11529766</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 259	 run number = 51207 	 job submission probably succeeded at Wed Feb  4 16:19:28 EST 2015
+[m[?25hParsing script ... (it may take while)
+<jsub><request><index>7093122</index><jobIndex>11529768</jobIndex></request></jsub>
+--------------------------------------------------------------------------------------------
+job number 260	 run number = 51208 	 job submission probably succeeded at Wed Feb  4 16:19:32 EST 2015
