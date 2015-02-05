@@ -10,13 +10,19 @@ void run_check()
 	TStopwatch runAllTime;
 
 	// Set debug mode
-//	bool debug = true;
-	bool debug = false;
+	bool debug = true;
+//	bool debug = false;
+
+	// Set verbose mode
+	bool verbose = true;
+//	bool verbose = false;
 
 	cout << "Running run_check()..." << endl;
 
 	if (debug) {cout << "Debug Mode On" << endl;}
 	else {cout << "Debug Mode Off" << endl;}
+	if (verbose) {cout << "Verbose Mode On" << endl;}
+	else {cout << "Verbose Mode Off" << endl;}
 
 	// Get runNumber from input.file
 	string line = "";
@@ -46,7 +52,7 @@ void run_check()
 
 
 // Gets run information and passes it to the workhorse script check_run
-void get_run_info(int runNumber, TStopwatch runInfoTime, bool debug)
+void get_run_info(int runNumber, TStopwatch runInfoTime, bool debug, bool verbose)
 {
 	cout << "============================================================" << endl;
 	cout << "Running get_run_info(" << runNumber << ",runInfoTime)..." << endl;
@@ -54,7 +60,8 @@ void get_run_info(int runNumber, TStopwatch runInfoTime, bool debug)
 	// Gets file prefix for current runNumber
 	TString findCmd = "find /volatile/clas/claseg4/pass2 -name 'root_";
 	findCmd += runNumber;
-	findCmd += "_pass2.a00.root'";
+	findCmd += "_pass2.a*root' -print -quit";
+//	findCmd += "_pass2.a00.root'";
 	TString fullFile = gSystem->GetFromPipe(findCmd);
 	TString filePrefix = fullFile.Remove(fullFile.Length()-25,fullFile.Length());
 
@@ -73,8 +80,11 @@ void get_run_info(int runNumber, TStopwatch runInfoTime, bool debug)
 	if      (fullFile.Contains("1p1gev")) {e_beam = 1.1;}
 	else if (fullFile.Contains("1p3gev")) {e_beam = 1.3;}
 	else if (fullFile.Contains("1p5gev")) {e_beam = 1.5;}
-	else if (fullFile.Contains("2gev"))   {e_beam = 2.0;}
-	else if (fullFile.Contains("2p2gev")) {e_beam = 2.2;}
+	else if (fullFile.Contains("2gev"))   
+	{
+		e_beam = 2.0;
+		if (fullFile.Contains("2p2gev")) {e_beam = 2.2;}
+	}
 	else if (fullFile.Contains("3gev"))   {e_beam = 3.0;}
 	else {cout << "ERR: Incorrect input." << endl; return;}
 
@@ -87,7 +97,7 @@ void get_run_info(int runNumber, TStopwatch runInfoTime, bool debug)
 	// Run main workhorse script for each sector
 	for (int j=sector; j<maxSector; j++)
 	{
-		check_run(runNumber, e_beam, target, filePrefix, j, debug, runInfoTime);
+		check_run(runNumber, e_beam, target, filePrefix, j, debug, verbose, runInfoTime);
 	}
 
 	cout << "Finished with get_run_info(" << runNumber << ",runInfoTime)!" << endl;
@@ -96,7 +106,7 @@ void get_run_info(int runNumber, TStopwatch runInfoTime, bool debug)
 }
 
 // Main workhorse script
-void check_run(int runNumber, double e_beam, TString target, TString filePrefix, int sector, bool debug, TStopwatch allTime)
+void check_run(int runNumber, double e_beam, TString target, TString filePrefix, int sector, bool debug, bool verbose, TStopwatch allTime)
 {
 	cout << "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv" << endl;
 	cout << "Running check_run for Run # " << runNumber << ", Sector " << sector << "..." << endl;
@@ -162,8 +172,8 @@ void check_run(int runNumber, double e_beam, TString target, TString filePrefix,
 		}
 		else
 		{
-			cout << "File " << fileName << " does not exist. Ending here." << endl;
-			a=999999999;
+			if (verbose) {cout << "File " << fileName << " does not exist. Ending here." << endl;}
+//			a=999999999;
 		}
 	}
 
