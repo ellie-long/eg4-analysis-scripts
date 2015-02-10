@@ -112,11 +112,8 @@ sub xml_io
 sub make_xml_sub_file
 {
 	my ($inbase , $outbase , $path_subs , $path_logs , $path_inputs , $subinfo , $macro , $commands , $path_root , $this_file , $output , $path_output , $expbase , $run_num, $this_file_1, $this_file_2, $this_file_3, $macro1, $output2) = @_;
-#	my ($inbase , $outbase , $path_subs , $path_logs , $path_inputs , $subinfo , $macro , $commands , $path_root , $input , $output , $path_output , $expbase , $run_num ,$this_file_1, $this_file_2, $this_file_3, $macro2) = @_;
 	my $subfile = $path_subs."batch_analysis_subfile_N";
 	$textout = $path_output."eg4_run_check_text_for_run_".$run_num.".out\n";
-#	my $destfile = "e05102_R_".$run_num.".root";
-#	my $destfile1 = "neutron_cuts-hand_target_asym_vs_nu_for_run_".$run_num.".root";
 # appending "mss:" to the front of the path if the file is located in the mss
 	if ($path_root =~ /^\/mss\/.*/)
 	{ $path_root = "mss:".$path_root; }
@@ -127,7 +124,6 @@ sub make_xml_sub_file
 	print SUBFILE "\t".xml_tag("Name"    , $subinfo{"jobname"})."\n";
 	print SUBFILE "\t".xml_tag("OS"      , $subinfo{"os"})."\n";
 	print SUBFILE "\t<Command><![CDATA[\n";
-#	print SUBFILE join "\n" , @{$commands};
 	print SUBFILE "echo '\\nellie\@ifarm> date' > ".$textout;
 	print SUBFILE "date >> ".$textout;
 	print SUBFILE "echo '\\nellie\@ifarm> source ".$path_inputs."set_environment_variables_for_vanalyzer\.tcsh' >> ".$textout;
@@ -144,19 +140,10 @@ sub make_xml_sub_file
 	print SUBFILE "echo ".$run_num." > input.file\n";
 	print SUBFILE "echo '\\nellie\@ifarm> cat input.file' >> ".$textout;
 	print SUBFILE "cat input.file >> ".$textout;
-#	print SUBFILE "analyzer  ".$neutron_path_inputs.$macro." > /work/halla/e05102/disk1/ellie/batch/input/neutron/text/text_for_run_".$run_num.".out\n";
-#	print SUBFILE "echo '\\nellie\@ifarm> root ".$run_check_path_inputs.$macro."' >> ".$textout;
 	print SUBFILE "echo '\\nellie\@ifarm> analyzer ".$macro."' >> ".$textout;
-#	print SUBFILE "analyzer ".$run_check_path_inputs.$macro." >> ".$path_results."text_for_run_".$run_num.".out";
-#	print SUBFILE "root ".$run_check_path_inputs.$macro." >> ".$textout;
 	print SUBFILE "analyzer ".$macro." >> ".$textout;
-	print SUBFILE "echo '\\nellie\@ifarm> cp *.png ".$path_output.".' >> ".$textout;
-	print SUBFILE "cp *.png ".$path_output.". >> ".$textout;
-#	print SUBFILE "echo '\\nellie\@ifarm> cp -v *.root ".$path_results.".' >> ".$textout;
-#	print SUBFILE "cp -v *.root ".$path_results.". >> ".$textout;
-#	print SUBFILE "echo '\\nellie\@ifarm> analyzer ./".$macro1."' >> ".$textout;
-#	print SUBFILE "analyzer ./".$macro1." >> ".$textout;
-#	print SUBFILE "analyzer  ".$neutron_path_inputs.$macro." > /w/halla-1/e05102/ellie/batch/inputs/neutron_hunt/text/text_for_run_".$run_num.".out\n";
+	print SUBFILE "echo '\\nellie\@ifarm> cp -r Run_Checks ".$path_output.".' >> ".$textout;
+	print SUBFILE "cp -r Run_Checks ".$path_output.". >> ".$textout;
 
 # input options
 	print SUBFILE "echo '\\nellie\@ifarm> ls -ltr' >> ".$textout;
@@ -167,44 +154,10 @@ sub make_xml_sub_file
 	print SUBFILE "\t<DiskSpace space=\"15\" unit=\"GB\"/>\n\n";
 	print SUBFILE "\t<Memory space=\"4\" unit=\"GB\"/>\n\n";
 	print SUBFILE "\t<TimeLimit unit=\"hours\" time=\"72\"/>\n\n";
-#	print SUBFILE "\t<TimeLimit unit=\"hours\" time=\"24\"/>\n\n";
-#	print SUBFILE "\t<TimeLimit unit=\"minutes\" time=\"10\"/>\n\n";
 	print SUBFILE "\t<Input src=\"".$run_check_path_inputs."run_check.cpp\" dest=\"run_check.cpp\"/>\n";
 
 	print SUBFILE "\n\t<Job>\n";
-#	print SUBFILE "\t\t".xml_io("Input"  , $path_run_check."rootlogon.C","rootlogon.C" )."\n";
-#	if (check_exist("/mss/halla/e05102/raw/e05102_".$run_num.".dat.0") ne "does not exist")
-#	{print SUBFILE "\t\t".xml_io("Input", "mss:/mss/halla/e05102/raw/e05102_".$run_num.".dat.0", "./e05102_".$run_num.".dat.0")."\n";}
-#	if (check_exist("/mss/halla/e05102/raw/e05102_".$run_num.".dat.1") ne "does not exist")
-#	{print SUBFILE "\t\t".xml_io("Input", "mss:/mss/halla/e05102/raw/e05102_".$run_num.".dat.1", "./e05102_".$run_num.".dat.1")."\n";}
-#	if (check_exist("/mss/halla/e05102/raw/e05102_".$run_num.".dat.2") ne "does not exist")
-#	{print SUBFILE "\t\t".xml_io("Input", "mss:/mss/halla/e05102/raw/e05102_".$run_num.".dat.2", "./e05102_".$run_num.".dat.2")."\n";}
-#	if (check_exist("/mss/halla/e05102/raw/e05102_".$run_num.".dat.3") ne "does not exist")
-#	{print SUBFILE "\t\t".xml_io("Input", "mss:/mss/halla/e05102/raw/e05102_".$run_num.".dat.3", "./e05102_".$run_num.".dat.3")."\n";}
-#	print SUBFILE "\t\t".xml_io("Input"  , $path_root.$input  ,              $input )."\n";
-#	if (check_exist($path_root.$this_file_1) ne "does not exist")
-#	{print SUBFILE "\t\t".xml_io("Input"	, $path_root.$this_file_1,$this_file_1 )."\n";}
-#	if (check_exist($path_root.$this_file_2) ne "does not exist")
-#	{print SUBFILE "\t\t".xml_io("Input"	, $path_root.$this_file_2,$this_file_2 )."\n";}
-#	if (check_exist($path_root.$this_file_3) ne "does not exist")
-#	{print SUBFILE "\t\t".xml_io("Input"  , $path_root.$this_file_3,$this_file_3 )."\n";}
-
-
-
-#	if (check_exist($path_root.$this_file_1) ne "does not exist")
-#	{print SUBFILE "\t\t".xml_io("Input"  , $path_root.$this_file_1,$this_file_1 )."\n";}	
-#	if (check_exist($path_root.$this_file_2) ne "does not exist")
-#	{print SUBFILE "\t\t".xml_io("Input"  , $path_root.$this_file_2,$this_file_2 )."\n";}
-#	if (check_exist($path_root.$this_file_3) ne "does not exist")
-#	{print SUBFILE "\t\t".xml_io("Input"  , $path_root.$this_file_3,$this_file_3 )."\n";}
-
-#	print SUBFILE "\t\t".xml_io("Input"  , $path_root.$input  ,              $destfile )."\n";
-#	print SUBFILE "\t\t".xml_io("Output" , "./".$output , $path_output.$output)."\n";
-#	print SUBFILE "\t\t".xml_io("Output" , "./summaryphy_".$run_num.".log" , $path_output."eg4_run_check_".$run_num.".log")."\n";
-#	print SUBFILE "\t\t".xml_io("Output" ,            $output2 , $path_output.$output2)."\n";
-#	print SUBFILE "\t\t".xml_io("Output" , "eg4_run_check_for_run_".$run_num.".txt" , $path_output."eg4_run_check_for_run_".$run_num.".txt")."\n";
-#	print SUBFILE "\t\t".xml_io("Output" , "charge_lt_for_run_".$run_num.".txt" , $path_output."charge_lt_for_run_".$run_num.".txt")."\n";
-#	print SUBFILE "\t\t".xml_io("Output" , "target_asymmetry_for_run_".$run_num.".txt" , $path_output."target_asymmetry_for_run_".$run_num.".txt")."\n";
+	print SUBFILE "\t\t".xml_io("Output" , "*".$run_num.".root" , $path_output.".")."\n";
 #	print SUBFILE "\t\t".xml_io("Output" ,            $output , $output)."\n";
 #	print SUBFILE "\t\t".xml_io("Output" , "text_for_run_".$run_num.".out" , $path_output."text_for_run_".$run_num.".out")."\n";
 	print SUBFILE "\t\t<Stdout dest=\"".$path_logs.$expbase."_".$run_num.$outbase."\.stdout\"/>\n";

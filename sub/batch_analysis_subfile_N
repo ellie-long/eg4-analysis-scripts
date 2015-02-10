@@ -4,30 +4,30 @@
 	<Name name="eg4_analysis_808_50982"/>
 	<OS name="centos65"/>
 	<Command><![CDATA[
-echo '\nellie@ifarm> date' > /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_50982.out
-date >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_50982.out
-echo '\nellie@ifarm> source /w/hallb/claseg4/ellie/analysis-scripts/inputs/set_environment_variables_for_vanalyzer.tcsh' >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_50982.out
-source /w/hallb/claseg4/ellie/analysis-scripts/inputs/set_environment_variables_for_vanalyzer.tcsh >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_50982.out
-echo '\nellie@ifarm> printenv' >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_50982.out
-printenv >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_50982.out
-echo '\nellie@ifarm> ls -ltr' >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_50982.out
-ls -ltr >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_50982.out
-echo '\nellie@ifarm> rm input.file' >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_50982.out
-rm input.file >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_50982.out
-echo '\nellie@ifarm> ls -ltr' >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_50982.out
-ls -ltr >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_50982.out
-echo '\nellie@ifarm> echo 50982 > input.file' >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_50982.out
+echo '\nellie@ifarm> date' > /w/hallb/claseg4/ellie/analysis-scripts/results/output_150206_18:30:03/eg4_run_check_text_for_run_50982.out
+date >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150206_18:30:03/eg4_run_check_text_for_run_50982.out
+echo '\nellie@ifarm> source /w/hallb/claseg4/ellie/analysis-scripts/inputs/set_environment_variables_for_vanalyzer.tcsh' >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150206_18:30:03/eg4_run_check_text_for_run_50982.out
+source /w/hallb/claseg4/ellie/analysis-scripts/inputs/set_environment_variables_for_vanalyzer.tcsh >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150206_18:30:03/eg4_run_check_text_for_run_50982.out
+echo '\nellie@ifarm> printenv' >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150206_18:30:03/eg4_run_check_text_for_run_50982.out
+printenv >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150206_18:30:03/eg4_run_check_text_for_run_50982.out
+echo '\nellie@ifarm> ls -ltr' >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150206_18:30:03/eg4_run_check_text_for_run_50982.out
+ls -ltr >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150206_18:30:03/eg4_run_check_text_for_run_50982.out
+echo '\nellie@ifarm> rm input.file' >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150206_18:30:03/eg4_run_check_text_for_run_50982.out
+rm input.file >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150206_18:30:03/eg4_run_check_text_for_run_50982.out
+echo '\nellie@ifarm> ls -ltr' >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150206_18:30:03/eg4_run_check_text_for_run_50982.out
+ls -ltr >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150206_18:30:03/eg4_run_check_text_for_run_50982.out
+echo '\nellie@ifarm> echo 50982 > input.file' >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150206_18:30:03/eg4_run_check_text_for_run_50982.out
 echo 50982 > input.file
-echo '\nellie@ifarm> cat input.file' >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_50982.out
-cat input.file >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_50982.out
-echo '\nellie@ifarm> analyzer run_check.cpp' >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_50982.out
-analyzer run_check.cpp >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_50982.out
-echo '\nellie@ifarm> cp *.png /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/.' >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_50982.out
-cp *.png /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/. >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_50982.out
-echo '\nellie@ifarm> ls -ltr' >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_50982.out
-ls -ltr >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_50982.out
-echo '\nellie@ifarm> date' >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_50982.out
-date >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/eg4_run_check_text_for_run_50982.out
+echo '\nellie@ifarm> cat input.file' >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150206_18:30:03/eg4_run_check_text_for_run_50982.out
+cat input.file >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150206_18:30:03/eg4_run_check_text_for_run_50982.out
+echo '\nellie@ifarm> analyzer run_check.cpp' >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150206_18:30:03/eg4_run_check_text_for_run_50982.out
+analyzer run_check.cpp >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150206_18:30:03/eg4_run_check_text_for_run_50982.out
+echo '\nellie@ifarm> cp -r Run_Checks /w/hallb/claseg4/ellie/analysis-scripts/results/output_150206_18:30:03/.' >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150206_18:30:03/eg4_run_check_text_for_run_50982.out
+cp -r Run_Checks /w/hallb/claseg4/ellie/analysis-scripts/results/output_150206_18:30:03/. >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150206_18:30:03/eg4_run_check_text_for_run_50982.out
+echo '\nellie@ifarm> ls -ltr' >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150206_18:30:03/eg4_run_check_text_for_run_50982.out
+ls -ltr >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150206_18:30:03/eg4_run_check_text_for_run_50982.out
+echo '\nellie@ifarm> date' >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150206_18:30:03/eg4_run_check_text_for_run_50982.out
+date >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150206_18:30:03/eg4_run_check_text_for_run_50982.out
 	]]></Command>
 
 	<DiskSpace space="15" unit="GB"/>
@@ -39,8 +39,9 @@ date >> /w/hallb/claseg4/ellie/analysis-scripts/results/output_150204_16:00:50/e
 	<Input src="/w/hallb/claseg4/ellie/analysis-scripts/inputs/run_check/run_check.cpp" dest="run_check.cpp"/>
 
 	<Job>
-		<Stdout dest="/w/hallb/claseg4/ellie/analysis-scripts/logs/job_on_150204_16:00:50/eg4_run_check_50982.stdout"/>
-		<Stderr dest="/w/hallb/claseg4/ellie/analysis-scripts/logs/job_on_150204_16:00:50/eg4_run_check_50982.stderr"/>
+		<Output src="*50982.root" dest="/w/hallb/claseg4/ellie/analysis-scripts/results/output_150206_18:30:03/."/>
+		<Stdout dest="/w/hallb/claseg4/ellie/analysis-scripts/logs/job_on_150206_18:30:03/eg4_run_check_50982.stdout"/>
+		<Stderr dest="/w/hallb/claseg4/ellie/analysis-scripts/logs/job_on_150206_18:30:03/eg4_run_check_50982.stderr"/>
 	</Job>
 
 </Request>
