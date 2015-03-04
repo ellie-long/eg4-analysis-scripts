@@ -312,7 +312,7 @@ void check_run(int runNumber, double e_beam, TString target, TString filePrefix,
 		TString titleVThPh = "Vertex th:ph for Run # ";
 		titleVThPh += runNumber;
 		cout << "Drawing " << titleVThPh << "..." << endl;
-		chain->Draw("atan(cx/cy)*180/3.14159:acos(cz/sqrt(cx*cx+cy*cy+cz*cz))*180/3.14159>>vThPh(300,0,50,300,-90,90)", cuts, "");
+		chain->Draw("atan2(cy,cx)*180/3.14159:acos(cz/sqrt(cx*cx+cy*cy+cz*cz))*180/3.14159>>vThPh(300,0,50,300,-180,180)", cuts, "");
 		vThPh->SetTitle(titleVThPh);
 		vThPh->SetStats(kFALSE);
 		vThPh->Draw("COLZ");
